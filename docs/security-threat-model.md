@@ -1,0 +1,31 @@
+# Security Threat Model
+
+Living document. Update whenever a new feature changes the attack surface (new endpoint, new external provider, new file type accepted, etc).
+
+Rating scale: Likelihood/Impact = Low / Medium / High.
+
+| Threat | Attack | Impact | Likelihood | Mitigation | Detection | Residual risk |
+|---|---|---|---|---|---|---|
+| Account takeover | Credential theft, phishing, reused passwords | High — full access to health/fitness data | Medium | Argon2id hashing, rate-limited login, refresh-token rotation, session invalidation on password change, optional MFA/passkey architecture | Audit log on login + password change; alert on impossible-travel / repeated failures | Medium until MFA is enabled by default |
+| Credential stuffing | Automated login attempts with leaked credential lists | High | Medium | Per-IP and per-account rate limiting on `/auth/login`, generic error messages (no user-enumeration), optional CAPTCHA under sustained load | Rate-limit trigger metrics, spike alerting | Low-Medium |
+| Brute force | Repeated password guesses | High | Medium | Same as above + exponential lockout backoff | Same | Low |
+| Broken access control / IDOR | Requesting `/users/{id}/...` or `/meals/{id}` with another user's ID | High — cross-user health data exposure | Medium | Every resource endpoint re-derives ownership from the authenticated session, never trusts the path/body ID alone; ownership check is a shared dependency, not per-route logic | Authorization test suite run in CI on every endpoint; 403 rate monitoring | Low if the ownership dependency is applied uniformly — enforced via code review checklist |
+| SQL injection | Malicious input in food names, notes, search | High | Low | ORM/parameterized queries only; no raw SQL string formatting from user input | Static analysis (bandit/ruff-security), query logging in dev | Low |
+| XSS | Malicious strings rendered in a future web client | Medium | Low (mobile-first, no HTML rendering initially) | Output encoding in any web surface, CSP once a web client exists | N/A until web client ships | Reassess at web-client launch |
+| CSRF | Cross-site request forgery against session cookies | Medium | Low (mobile client uses bearer tokens, not cookies) | If a web client is added with cookie auth, add CSRF tokens + SameSite cookies | N/A until web client ships | Reassess at web-client launch |
+| SSRF | Backend induced to fetch attacker-controlled URLs (e.g. barcode/food image URL fields) | Medium | Low-Medium | No user-supplied URL is ever fetched server-side without an allowlist; image uploads go through validated multipart upload, not URL fetch | Egress monitoring on backend network | Low |
+| File upload attacks | Malicious file disguised as image (food/progress/profile photos) | Medium-High | Medium | Size limits, MIME + extension validation, re-encoding on ingest, private bucket storage, signed URLs only, no execution context for uploaded files | Storage access logs | Low-Medium |
+| API abuse / scraping | Automated bulk access to food database or AI endpoints | Medium | Medium | Rate limiting, per-user AI usage quotas, pagination caps, authentication required on all non-public endpoints | Usage/cost dashboards, anomaly alerts | Medium — revisit quotas post-launch |
+| AI prompt injection | Instructions embedded in food/workout names, notes, or imported data attempting to hijack the AI coach | Medium-High | Medium-High | User content always passed as data, never concatenated into system instructions; strict system prompt; tool-calling with backend-side authorization on every tool; output schema validation | Logging of AI tool-call attempts and rejections | Medium — adversarial input is an active area, treat as ongoing hardening |
+| Data leakage (AI) | AI provider unintentionally retains or logs sensitive health data | Medium-High | Medium | Minimum-necessary data sent to AI providers (no email/name/tokens/payment info), provider data-processing terms reviewed before integration | Documented in `ai-safety.md` and `third-party-services.md` | Medium — dependent on provider's actual practices, reassess per provider |
+| Insider access | Engineer/operator misuses direct DB or admin access | High | Low | Least-privilege DB roles, no direct production DB access without audit trail, secrets not shared in plaintext channels | Audit logging on admin actions (once admin tooling exists) | Medium until formal access controls are built |
+| Stolen tokens | Access/refresh token exfiltrated via device compromise or MITM | High | Low-Medium | Short-lived access tokens, rotating refresh tokens, HTTPS-only, server-side session revocation | Session table shows anomalous concurrent sessions | Medium |
+| Database compromise | Direct DB breach | High | Low | Least-privilege app DB user, encrypted backups, network isolation, no public DB exposure | DB connection/audit logging | Medium — depends on hosting provider's controls |
+| Third-party provider compromise | AI/food-DB/storage/email provider breach exposes shared data | Medium-High | Low-Medium | Minimum data shared per provider (`third-party-services.md`), provider selection considers security posture | Provider status pages / breach notifications | Medium — inherent to using any third party |
+| Supply-chain attacks | Malicious dependency in backend/mobile package tree | High | Low-Medium | Lockfiles committed, CI dependency scanning, minimal dependency footprint, pin versions | Dependabot / `pip-audit` / `npm audit` in CI | Medium — ecosystem-wide risk |
+| Secret leakage | API key/DB password committed to Git or logged | High | Medium | `.gitignore` covers all secret files, pre-push secret scan, secrets only via env vars, logging redaction | CI secret-scanning step | Low if process is followed consistently |
+
+## Process
+
+- This table is reviewed whenever a new external integration, file-upload surface, or AI tool is added.
+- "Residual risk" is not zero anywhere — it records what's left after mitigation, for prioritizing future work, not a compliance claim.
