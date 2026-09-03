@@ -6,6 +6,7 @@ from app.models.profile import UnitSystem, UserProfile
 from app.models.user import User, UserSession, UserStatus
 from app.models.water_entry import WaterEntry
 from app.models.weight_entry import WeightEntry
+from app.models.workout import Workout, WorkoutExercise, WorkoutSession, WorkoutSet, WorkoutType
 
 __all__ = [
     "BodyMeasurement",
@@ -23,4 +24,9 @@ __all__ = [
     "UserStatus",
     "WaterEntry",
     "WeightEntry",
+    "Workout",
+    "WorkoutExercise",
+    "WorkoutSession",
+    "WorkoutSet",
+    "WorkoutType",
 ]
