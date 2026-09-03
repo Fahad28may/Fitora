@@ -13,6 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.db.base import Base
+from app.db.seed_data import SEED_EXERCISES
 from app.db.session import get_db
 
 # Imported eagerly at module load, before any event loop exists, so
@@ -20,6 +21,7 @@ from app.db.session import get_db
 # registration) happen at plain synchronous import time rather than racing
 # SQLAlchemy's greenlet bridge inside the first test.
 from app.main import app
+from app.models.exercise import Exercise
 
 
 @pytest.fixture
@@ -37,6 +39,18 @@ async def db_session() -> AsyncGenerator[AsyncSession]:
 
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
     async with session_factory() as session:
+        session.add_all(
+            Exercise(
+                name=row[0],
+                muscle_groups=row[1],
+                equipment=row[2],
+                instructions=row[3],
+                difficulty=row[4],
+                exercise_type=row[5],
+            )
+            for row in SEED_EXERCISES
+        )
+        await session.commit()
         yield session
 
     await engine.dispose()
