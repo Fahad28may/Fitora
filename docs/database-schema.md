@@ -54,27 +54,21 @@ Deterministically computed by the backend calorie-calculation service (see `docs
 
 ## Nutrition
 
+**Implemented (Phase 1):** `foods`, `food_nutrition`, `food_diary_entries` below, as built. `meals`/`meal_items` (reusable meal templates) and `recipes`/`recipe_ingredients` are deferred — Phase 1 scope is search/manual food logging, not reusable templates — so `food_diary_entries` references `food_id` directly rather than through a `meal_items` indirection. Revisit this table once meal templates are built, since at that point a shared line-item table (as originally sketched) may be worth the complexity.
+
 ### `foods`
-| id | source (enum: system, user, external_db) | owner_user_id (nullable, set when source=user) | name | brand (nullable) | barcode (nullable, indexed) | serving_description | serving_grams (nullable) |
+| id | source (enum: system, user, external_db) | owner_user_id (nullable, set when source=user) | name (indexed) | brand (nullable) | barcode (nullable, indexed, unused until barcode scanning in Phase 4) | serving_description | serving_grams (nullable for system foods; required when a user creates a custom food, so grams-based scaling is always well-defined) |
 
 ### `food_nutrition`
-| food_id PK/FK → foods | calories_kcal | protein_g | carbs_g | fat_g | fiber_g (nullable) | per_grams (basis, e.g. per 100g or per serving) |
-
-### `meals`
-User-created reusable meal templates ("My Breakfast").
-| id | user_id FK | name | created_at |
-
-### `meal_items`
-| id | meal_id FK (nullable) | food_diary_entry_id FK (nullable) | food_id FK | quantity | unit | grams_equivalent |
-Exactly one of `meal_id` / `food_diary_entry_id` is set — a meal item belongs either to a reusable meal template or to a logged diary entry, not both.
+| food_id PK/FK → foods | calories_kcal | protein_g | carbs_g | fat_g | fiber_g (nullable) | per_grams (basis — for user-created foods, equal to serving_grams) |
+Nutrition for a logged entry is computed on read (grams logged ÷ per_grams × values), not snapshotted at log time — there's no food-editing endpoint yet, so this doesn't yet risk retroactively changing historical entries in practice, but revisit if/when custom foods become editable.
 
 ### `food_diary_entries`
-The actual log of what a user ate on a given day.
-| id | user_id FK, indexed with (user_id, logged_at) | logged_at (date) | meal_category (breakfast/lunch/dinner/snack) | source (search/manual/barcode/nl/photo) | created_via_ai (bool) | ai_confidence (nullable) |
+The actual log of what a user ate on a given day. One food per row; logging "breakfast: eggs, toast, coffee" is three rows sharing `logged_at`/`meal_category`.
+| id | user_id FK, indexed with (user_id, logged_at) | food_id FK | logged_at (date) | meal_category (breakfast/lunch/dinner/snack) | quantity | unit (serving/gram) | source (search/manual/barcode/nl/photo — only search/manual wired up so far) | created_via_ai (bool) | ai_confidence (nullable) |
 
-### `recipes` / `recipe_ingredients`
-| recipes: id, owner_user_id, name, servings |
-| recipe_ingredients: id, recipe_id FK, food_id FK, quantity, unit |
+### `meals` / `meal_items` — deferred
+### `recipes` / `recipe_ingredients` — deferred
 
 ### `water_entries`
 | id | user_id FK | logged_at | amount_ml |
