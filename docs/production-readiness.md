@@ -29,11 +29,11 @@ Status values: `PASS`, `FAIL`, `NEEDS REVIEW`. This checklist existing does **no
 ## AI
 | Item | Status | Notes |
 |---|---|---|
-| Prompt injection | NEEDS REVIEW | Design in `ai-safety.md`, not yet implemented |
-| Data leakage | NEEDS REVIEW | |
-| Tool authorization | NEEDS REVIEW | |
-| Unsafe health advice | NEEDS REVIEW | |
-| Output validation | NEEDS REVIEW | |
+| Prompt injection | NEEDS REVIEW | Architectural defenses implemented (data/instruction separation, schema validation, length limits — see `ai-safety.md`); not adversarially tested against a live model |
+| Data leakage | NEEDS REVIEW | Only dashboard/weight/workout data sent to AI provider, confirmed by code review; provider's own retention/training policy not yet independently verified |
+| Tool authorization | PASS (N/A) | No tools exist yet — coach is read-only/advisory, cannot mutate data. Re-review when tool-calling is built |
+| Unsafe health advice | NEEDS REVIEW | System-prompt rules in place; actual model compliance not verified without a live `AI_API_KEY` |
+| Output validation | PASS | Food parsing: Pydantic schema + one retry + 422 fallback. Coach: non-empty, length-capped |
 
 ## Files
 | Item | Status | Notes |
