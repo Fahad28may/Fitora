@@ -1,10 +1,10 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Numeric
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, str_enum_column
 from app.services.calorie_service import GoalIntensity, GoalType
 
 
@@ -15,10 +15,10 @@ class Goal(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
     goal_type: Mapped[GoalType] = mapped_column(
-        Enum(GoalType, native_enum=False, length=32), nullable=False
+        str_enum_column(GoalType, 32), nullable=False
     )
     intensity: Mapped[GoalIntensity] = mapped_column(
-        Enum(GoalIntensity, native_enum=False, length=16), nullable=False
+        str_enum_column(GoalIntensity, 16), nullable=False
     )
     target_weight_kg: Mapped[float | None] = mapped_column(Numeric(5, 1), nullable=True)
 

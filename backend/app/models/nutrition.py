@@ -2,10 +2,10 @@ from datetime import date
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, Enum, ForeignKey, Index, Integer, Numeric, String
+from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, str_enum_column
 
 
 class FoodSource(StrEnum):
@@ -39,7 +39,7 @@ class Food(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (Index("ix_foods_name", "name"),)
 
     source: Mapped[FoodSource] = mapped_column(
-        Enum(FoodSource, native_enum=False, length=16), nullable=False
+        str_enum_column(FoodSource, 16), nullable=False
     )
     owner_user_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
@@ -79,14 +79,14 @@ class FoodDiaryEntry(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     logged_at: Mapped[date] = mapped_column(Date, nullable=False)
     meal_category: Mapped[MealCategory] = mapped_column(
-        Enum(MealCategory, native_enum=False, length=16), nullable=False
+        str_enum_column(MealCategory, 16), nullable=False
     )
     quantity: Mapped[float] = mapped_column(Numeric(7, 2), nullable=False)
     unit: Mapped[LogUnit] = mapped_column(
-        Enum(LogUnit, native_enum=False, length=16), nullable=False
+        str_enum_column(LogUnit, 16), nullable=False
     )
     source: Mapped[LogSource] = mapped_column(
-        Enum(LogSource, native_enum=False, length=24), nullable=False
+        str_enum_column(LogSource, 24), nullable=False
     )
     created_via_ai: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ai_confidence: Mapped[int | None] = mapped_column(Integer, nullable=True)

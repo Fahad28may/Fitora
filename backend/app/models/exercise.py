@@ -1,9 +1,9 @@
 from enum import StrEnum
 
-from sqlalchemy import JSON, Enum, Index, String, Text
+from sqlalchemy import JSON, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, str_enum_column
 
 
 class ExerciseType(StrEnum):
@@ -28,8 +28,8 @@ class Exercise(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     equipment: Mapped[str | None] = mapped_column(String(60), nullable=True)
     instructions: Mapped[str] = mapped_column(Text, nullable=False)
     difficulty: Mapped[ExerciseDifficulty] = mapped_column(
-        Enum(ExerciseDifficulty, native_enum=False, length=16), nullable=False
+        str_enum_column(ExerciseDifficulty, 16), nullable=False
     )
     exercise_type: Mapped[ExerciseType] = mapped_column(
-        Enum(ExerciseType, native_enum=False, length=16), nullable=False
+        str_enum_column(ExerciseType, 16), nullable=False
     )

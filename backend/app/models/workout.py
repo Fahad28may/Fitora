@@ -2,10 +2,10 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, str_enum_column
 
 
 class WorkoutType(StrEnum):
@@ -23,7 +23,7 @@ class Workout(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     workout_type: Mapped[WorkoutType] = mapped_column(
-        Enum(WorkoutType, native_enum=False, length=16), nullable=False
+        str_enum_column(WorkoutType, 16), nullable=False
     )
 
 

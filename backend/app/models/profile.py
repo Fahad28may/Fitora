@@ -2,10 +2,10 @@ from datetime import date
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import Date, Enum, ForeignKey, Numeric, String
+from sqlalchemy import Date, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base
+from app.db.base import Base, str_enum_column
 from app.services.calorie_service import ActivityLevel, Sex
 
 
@@ -22,13 +22,13 @@ class UserProfile(Base):
     )
     display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
-    sex: Mapped[Sex | None] = mapped_column(Enum(Sex, native_enum=False, length=16), nullable=True)
+    sex: Mapped[Sex | None] = mapped_column(str_enum_column(Sex, 16), nullable=True)
     height_cm: Mapped[float | None] = mapped_column(Numeric(5, 1), nullable=True)
     activity_level: Mapped[ActivityLevel | None] = mapped_column(
-        Enum(ActivityLevel, native_enum=False, length=32), nullable=True
+        str_enum_column(ActivityLevel, 32), nullable=True
     )
     unit_system: Mapped[UnitSystem] = mapped_column(
-        Enum(UnitSystem, native_enum=False, length=16),
+        str_enum_column(UnitSystem, 16),
         default=UnitSystem.METRIC,
         nullable=False,
     )

@@ -2,10 +2,10 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, str_enum_column
 
 
 class UserStatus(StrEnum):
@@ -23,7 +23,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     status: Mapped[UserStatus] = mapped_column(
-        Enum(UserStatus, native_enum=False, length=32),
+        str_enum_column(UserStatus, 32),
         default=UserStatus.ACTIVE,
         nullable=False,
     )
