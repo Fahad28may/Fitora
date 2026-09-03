@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 
+import { aiApi, type ParsedFoodItemOut } from "../../src/api/ai";
 import { ApiError } from "../../src/api/client";
 import { foodDiaryApi } from "../../src/api/foodDiary";
 import { foodsApi } from "../../src/api/foods";
@@ -34,6 +35,12 @@ export default function NutritionScreen(): React.JSX.Element {
   const [isLogging, setIsLogging] = useState(false);
 
   const [diaryEntries, setDiaryEntries] = useState<FoodDiaryEntryOut[]>([]);
+
+  const [showNLInput, setShowNLInput] = useState(false);
+  const [nlText, setNlText] = useState("");
+  const [nlResults, setNlResults] = useState<ParsedFoodItemOut[]>([]);
+  const [nlError, setNlError] = useState<string | null>(null);
+  const [isParsing, setIsParsing] = useState(false);
 
   const loadDiary = useCallback(async () => {
     setDiaryEntries(await foodDiaryApi.listForDate(todayIso()));
@@ -66,6 +73,36 @@ export default function NutritionScreen(): React.JSX.Element {
   function handleFoodCreated(food: FoodOut): void {
     setShowCreateForm(false);
     setSelectedFood(food);
+  }
+
+  async function handleParse(): Promise<void> {
+    if (!nlText.trim()) return;
+    setNlError(null);
+    setIsParsing(true);
+    try {
+      const response = await aiApi.parseFood(nlText.trim());
+      setNlResults(response.items);
+      if (response.items.length === 0) {
+        setNlError("Couldn't identify any foods in that — try describing it differently.");
+      }
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 503) {
+        setNlError("AI food parsing isn't configured on this server — search or log manually instead.");
+      } else {
+        setNlError(err instanceof ApiError ? err.message : "Could not parse that.");
+      }
+    } finally {
+      setIsParsing(false);
+    }
+  }
+
+  function handleSelectParsedMatch(item: ParsedFoodItemOut, food: FoodOut): void {
+    setSelectedFood(food);
+    setQuantity(String(item.quantity));
+    setUnit("serving");
+    setShowNLInput(false);
+    setNlText("");
+    setNlResults([]);
   }
 
   async function handleLog(): Promise<void> {
@@ -103,6 +140,60 @@ export default function NutritionScreen(): React.JSX.Element {
       ListHeaderComponent={
         <View style={{ gap: 12, marginBottom: 8 }}>
           <Text style={screenStyles.title}>Nutrition</Text>
+
+          <TouchableOpacity onPress={() => setShowNLInput((v) => !v)}>
+            <Text style={s.secondaryButtonText}>
+              {showNLInput ? "Search instead" : "Describe what you ate instead"}
+            </Text>
+          </TouchableOpacity>
+
+          {showNLInput ? (
+            <View style={{ gap: 10 }}>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <TextInput
+                  style={[s.input, { flex: 1 }]}
+                  placeholder="e.g. two eggs and a cup of chai"
+                  value={nlText}
+                  onChangeText={setNlText}
+                  onSubmitEditing={() => void handleParse()}
+                />
+                <TouchableOpacity
+                  style={[s.button, { marginTop: 0 }]}
+                  onPress={() => void handleParse()}
+                >
+                  {isParsing ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={s.buttonText}>Parse</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+              {nlError ? <Text style={s.error}>{nlError}</Text> : null}
+
+              {nlResults.map((item) => (
+                <View key={`${item.name}-${item.quantity}`} style={s.card}>
+                  <Text style={screenStyles.cardTitle}>
+                    {item.quantity} {item.unit} {item.name}
+                  </Text>
+                  {item.matches.length === 0 ? (
+                    <Text style={screenStyles.body}>No matching food found — log manually.</Text>
+                  ) : (
+                    item.matches.map((food) => (
+                      <TouchableOpacity
+                        key={food.id}
+                        onPress={() => handleSelectParsedMatch(item, food)}
+                        style={{ paddingVertical: 4 }}
+                      >
+                        <Text style={screenStyles.body}>
+                          → {food.name} ({food.serving_description}, {food.calories_kcal} kcal)
+                        </Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </View>
+              ))}
+            </View>
+          ) : null}
 
           <View style={{ flexDirection: "row", gap: 10 }}>
             <TextInput
