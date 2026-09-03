@@ -14,6 +14,11 @@ class CalorieProgress(BaseModel):
     remaining: float | None
 
 
+class WaterProgress(BaseModel):
+    target_ml: int | None
+    consumed_ml: int
+
+
 class DashboardOut(BaseModel):
     date: date_type
     has_profile: bool
@@ -22,5 +27,6 @@ class DashboardOut(BaseModel):
     protein: MacroProgress
     carbs: MacroProgress
     fat: MacroProgress
+    water: WaterProgress
     latest_weight_kg: float | None
     latest_weight_logged_at: date_type | None
