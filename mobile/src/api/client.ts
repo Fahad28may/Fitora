@@ -4,10 +4,14 @@ import type { TokenResponse } from "./types";
 
 export class ApiError extends Error {
   status: number;
+  // Raw `detail` field from the backend's error body — usually a string,
+  // but some endpoints (e.g. unsafe goal targets) return a structured object.
+  detail: unknown;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, detail?: unknown) {
     super(message);
     this.status = status;
+    this.detail = detail;
   }
 }
 
@@ -67,10 +71,11 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   const body = contentType.includes("application/json") ? await response.json() : null;
 
   if (!response.ok) {
+    const detail =
+      body && typeof body === "object" && "detail" in body ? (body as { detail: unknown }).detail : undefined;
     const message =
-      (body && typeof body === "object" && "detail" in body && String(body.detail)) ||
-      "Something went wrong. Please try again.";
-    throw new ApiError(response.status, message);
+      typeof detail === "string" ? detail : "Something went wrong. Please try again.";
+    throw new ApiError(response.status, message, detail);
   }
 
   return body as T;
