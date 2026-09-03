@@ -49,6 +49,16 @@ class WeightRepository:
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
+    async def get_latest_as_of(self, user_id: UUID, as_of: date) -> WeightEntry | None:
+        query = (
+            select(WeightEntry)
+            .where(WeightEntry.user_id == user_id, WeightEntry.logged_at <= as_of)
+            .order_by(WeightEntry.logged_at.desc(), WeightEntry.created_at.desc())
+            .limit(1)
+        )
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
+
     async def get_by_id(self, entry_id: UUID) -> WeightEntry | None:
         result = await self.db.execute(select(WeightEntry).where(WeightEntry.id == entry_id))
         return result.scalar_one_or_none()
