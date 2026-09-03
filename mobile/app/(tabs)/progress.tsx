@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 import { ApiError } from "../../src/api/client";
+import type { BodyMeasurementOut } from "../../src/api/measurements";
+import { measurementsApi } from "../../src/api/measurements";
 import type { WeightEntryOut } from "../../src/api/types";
 import { weightApi } from "../../src/api/weight";
 import { formStyles as s } from "../../src/ui/formStyles";
@@ -15,9 +17,15 @@ export default function ProgressScreen(): React.JSX.Element {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  const [measurements, setMeasurements] = useState<BodyMeasurementOut[]>([]);
+
   const load = useCallback(async () => {
-    const data = await weightApi.list();
-    setEntries(data);
+    const [weightData, measurementData] = await Promise.all([
+      weightApi.list(),
+      measurementsApi.list(),
+    ]);
+    setEntries(weightData);
+    setMeasurements(measurementData);
     setIsLoading(false);
   }, []);
 
@@ -43,6 +51,11 @@ export default function ProgressScreen(): React.JSX.Element {
 
   async function handleDelete(id: string): Promise<void> {
     await weightApi.remove(id);
+    await load();
+  }
+
+  async function handleDeleteMeasurement(id: string): Promise<void> {
+    await measurementsApi.remove(id);
     await load();
   }
 
@@ -90,6 +103,139 @@ export default function ProgressScreen(): React.JSX.Element {
           </TouchableOpacity>
         </View>
       )}
+      ListFooterComponent={
+        <MeasurementsSection
+          measurements={measurements}
+          onCreated={load}
+          onDelete={(id) => void handleDeleteMeasurement(id)}
+        />
+      }
     />
+  );
+}
+
+function MeasurementsSection({
+  measurements,
+  onCreated,
+  onDelete,
+}: {
+  measurements: BodyMeasurementOut[];
+  onCreated: () => Promise<void>;
+  onDelete: (id: string) => void;
+}): React.JSX.Element {
+  const [waist, setWaist] = useState("");
+  const [chest, setChest] = useState("");
+  const [arm, setArm] = useState("");
+  const [leg, setLeg] = useState("");
+  const [hip, setHip] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const toNumberOrNull = (value: string): number | null =>
+    value.trim() === "" ? null : Number(value);
+
+  const canSubmit = [waist, chest, arm, leg, hip].some((v) => v.trim() !== "");
+
+  async function handleSubmit(): Promise<void> {
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await measurementsApi.create({
+        logged_at: todayIso(),
+        waist_cm: toNumberOrNull(waist),
+        chest_cm: toNumberOrNull(chest),
+        arm_cm: toNumberOrNull(arm),
+        leg_cm: toNumberOrNull(leg),
+        hip_cm: toNumberOrNull(hip),
+      });
+      setWaist("");
+      setChest("");
+      setArm("");
+      setLeg("");
+      setHip("");
+      await onCreated();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not log measurements.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <View style={{ gap: 12, marginTop: 20 }}>
+      <Text style={screenStyles.cardTitle}>Measurements</Text>
+
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+        <TextInput
+          style={[s.input, { flex: 1, minWidth: 100 }]}
+          placeholder="Waist (cm)"
+          keyboardType="numeric"
+          value={waist}
+          onChangeText={setWaist}
+        />
+        <TextInput
+          style={[s.input, { flex: 1, minWidth: 100 }]}
+          placeholder="Chest (cm)"
+          keyboardType="numeric"
+          value={chest}
+          onChangeText={setChest}
+        />
+        <TextInput
+          style={[s.input, { flex: 1, minWidth: 100 }]}
+          placeholder="Arm (cm)"
+          keyboardType="numeric"
+          value={arm}
+          onChangeText={setArm}
+        />
+        <TextInput
+          style={[s.input, { flex: 1, minWidth: 100 }]}
+          placeholder="Leg (cm)"
+          keyboardType="numeric"
+          value={leg}
+          onChangeText={setLeg}
+        />
+        <TextInput
+          style={[s.input, { flex: 1, minWidth: 100 }]}
+          placeholder="Hip (cm)"
+          keyboardType="numeric"
+          value={hip}
+          onChangeText={setHip}
+        />
+      </View>
+
+      {error ? <Text style={s.error}>{error}</Text> : null}
+
+      <TouchableOpacity
+        style={[s.button, (!canSubmit || isSubmitting) && s.buttonDisabled]}
+        onPress={() => void handleSubmit()}
+        disabled={!canSubmit || isSubmitting}
+      >
+        {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>Log measurements</Text>}
+      </TouchableOpacity>
+
+      {measurements.length === 0 ? (
+        <Text style={screenStyles.body}>No measurements logged yet.</Text>
+      ) : (
+        measurements.map((m) => (
+          <View key={m.id} style={[screenStyles.card, { marginBottom: 10 }]}>
+            <Text style={screenStyles.body}>{m.logged_at}</Text>
+            <Text style={screenStyles.body}>
+              {[
+                m.waist_cm !== null ? `Waist ${m.waist_cm}cm` : null,
+                m.chest_cm !== null ? `Chest ${m.chest_cm}cm` : null,
+                m.arm_cm !== null ? `Arm ${m.arm_cm}cm` : null,
+                m.leg_cm !== null ? `Leg ${m.leg_cm}cm` : null,
+                m.hip_cm !== null ? `Hip ${m.hip_cm}cm` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </Text>
+            <TouchableOpacity onPress={() => onDelete(m.id)}>
+              <Text style={[s.error, { fontSize: 13 }]}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        ))
+      )}
+    </View>
   );
 }

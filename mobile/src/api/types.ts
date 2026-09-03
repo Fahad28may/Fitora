@@ -147,6 +147,11 @@ export interface CalorieProgress {
   remaining: number | null;
 }
 
+export interface WaterProgress {
+  target_ml: number | null;
+  consumed_ml: number;
+}
+
 export interface DashboardOut {
   date: string;
   has_profile: boolean;
@@ -155,6 +160,7 @@ export interface DashboardOut {
   protein: MacroProgress;
   carbs: MacroProgress;
   fat: MacroProgress;
+  water: WaterProgress;
   latest_weight_kg: number | null;
   latest_weight_logged_at: string | null;
 }

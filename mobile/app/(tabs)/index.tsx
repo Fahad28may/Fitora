@@ -4,8 +4,12 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } 
 
 import { dashboardApi } from "../../src/api/dashboard";
 import type { DashboardOut } from "../../src/api/types";
+import { waterApi } from "../../src/api/water";
 import { useAuth } from "../../src/auth/AuthContext";
+import { todayIso } from "../../src/utils/date";
 import { screenStyles } from "./styles";
+
+const QUICK_ADD_WATER_ML = [250, 500];
 
 export default function HomeScreen(): React.JSX.Element {
   const { user, logout } = useAuth();
@@ -26,6 +30,11 @@ export default function HomeScreen(): React.JSX.Element {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function handleAddWater(amountMl: number): Promise<void> {
+    await waterApi.create(todayIso(), amountMl);
+    await load();
+  }
 
   if (isLoading) {
     return (
@@ -88,6 +97,25 @@ export default function HomeScreen(): React.JSX.Element {
             <MacroRow label="Protein" value={dashboard.protein} unit="g" />
             <MacroRow label="Carbs" value={dashboard.carbs} unit="g" />
             <MacroRow label="Fat" value={dashboard.fat} unit="g" />
+          </View>
+
+          <View style={screenStyles.card}>
+            <Text style={screenStyles.cardTitle}>Water</Text>
+            <Text style={screenStyles.body}>
+              {dashboard.water.consumed_ml} ml
+              {dashboard.water.target_ml !== null ? ` / ${dashboard.water.target_ml} ml` : ""}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              {QUICK_ADD_WATER_ML.map((amount) => (
+                <Pressable
+                  key={amount}
+                  style={screenStyles.secondaryButton}
+                  onPress={() => void handleAddWater(amount)}
+                >
+                  <Text style={screenStyles.secondaryButtonText}>+{amount} ml</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
 
           <View style={screenStyles.card}>
