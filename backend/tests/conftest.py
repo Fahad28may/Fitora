@@ -6,6 +6,11 @@ from pathlib import Path
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-not-for-production-use-only")
 os.environ.setdefault("RATE_LIMIT_LOGIN_PER_MINUTE", "1000")
 os.environ.setdefault("RATE_LIMIT_DEFAULT_PER_MINUTE", "1000")
+# Force-disabled (not setdefault) regardless of what a developer's local
+# .env has: pydantic-settings' env_file loading would otherwise leak a real
+# AI_API_KEY into the test run, silently turning "AI disabled" tests into
+# real, quota-consuming calls to the actual provider.
+os.environ["AI_API_KEY"] = ""
 
 import pytest
 from httpx import ASGITransport, AsyncClient
