@@ -4,10 +4,10 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.goal import Goal
+from app.models.weight_entry import WeightEntry
 from app.repositories.profile_repository import GoalRepository
 from app.repositories.water_repository import WaterRepository
 from app.repositories.weight_repository import WeightRepository
-from app.models.weight_entry import WeightEntry
 from app.repositories.workout_repository import WorkoutSessionRepository
 from app.schemas.recommendation import (
     Recommendation,
