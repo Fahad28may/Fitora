@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     ai_model_coach: str = Field(
         default="nvidia/nemotron-3.5-lightning:free", alias="AI_MODEL_COACH"
     )
+    ai_model_actions: str = Field(
+        default="nvidia/nemotron-3.5-lightning:free", alias="AI_MODEL_ACTIONS"
+    )
     ai_request_timeout_seconds: float = Field(
         default=20.0, alias="AI_REQUEST_TIMEOUT_SECONDS"
     )

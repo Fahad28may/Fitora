@@ -1,10 +1,19 @@
 # AI Safety & Architecture
 
-**Implemented (Phase 3, this pass):** NL food parsing (`POST /ai/parse-food`) and a single-thread AI coach (`POST /ai/coach/messages`, `GET /ai/coach/messages`, `DELETE /ai/coach/messages`), both via [OpenRouter](https://openrouter.ai). See `app/services/ai/`.
+**Implemented (Phase 3):** NL food parsing (`POST /ai/parse-food`), a single-thread AI coach (`POST /ai/coach/messages`, `GET /ai/coach/messages`, `DELETE /ai/coach/messages`), and AI-proposed mutating actions via a **propose → confirm** flow (`POST /ai/actions/propose`, `POST /ai/actions/confirm`) for `log_weight`, `log_water`, and `log_food`. All via [OpenRouter](https://openrouter.ai). See `app/services/ai/`.
 
-**Not implemented:** tool-calling / mutating actions (`create_meal`, `log_food`, etc. below are the target design, not built yet — the coach is read-only/advisory and cannot write anything), photo food recognition, barcode-triggered AI. The coach explicitly tells the model it has no tools and cannot take actions; it can only discuss and suggest, and tells the user to log things themselves via the normal screens.
+**Not implemented:** additional action tools (`create_workout`, `create_meal`, goal edits), photo food recognition, barcode-triggered AI. The **coach itself still cannot take actions** — it is read-only/advisory and its system prompt says so; mutating actions live only behind the separate, explicitly-confirmed `/ai/actions/*` endpoints, never inside a coach reply.
 
-## Architecture (target — tool-calling not yet built)
+## Architecture
+
+```text
+User → /ai/actions/propose → Backend → Retrieve authorized user data
+     → AI proposes ONE structured action (never executes) → Backend validates against a
+       fixed action allow-list + per-action Pydantic bounds → proposal returned to user
+User reviews & confirms → /ai/actions/confirm → Backend re-validates (no AI) → Database
+```
+
+The model only ever *proposes*. Nothing is written during `propose`. The write happens only in `confirm`, which calls no AI, takes `user_id` from the authenticated session, and re-validates every parameter with the same business-rule bounds as the manual endpoints. This is the concrete realization of the "User confirmation (if mutating)" step below.
 
 ```text
 User → AI request → Backend → Validate request → Retrieve authorized user data
@@ -17,23 +26,27 @@ The LLM never talks to the database, never receives raw credentials, and never e
 1. Receives a system prompt plus **structured, minimum-necessary application data** the backend has already fetched and authorized for the requesting user (today's dashboard, recent weight, recent workout sessions for the coach; nothing beyond the raw text for parsing).
 2. Returns plain text (coach) or a JSON array validated against a Pydantic schema (parsing) — never a tool call, since none exist yet.
 
-## Tools (planned, not built)
+## Tools
+
+Built (behind propose → confirm):
 
 ```text
-create_meal(user_id: from session, ...)
-log_food(user_id: from session, ...)
-create_workout(user_id: from session, ...)
-update_weight(user_id: from session, ...)
+log_weight(user_id: from session, weight_kg)
+log_water(user_id: from session, amount_ml)
+log_food(user_id: from session, food_id, quantity, unit, meal_category)
 ```
 
-When built, the rules for every tool will be:
+Not built yet: `create_workout`, `create_meal`, goal edits.
+
+The rules, enforced for every built tool (see `app/services/ai/action_service.py` and `tests/test_ai_actions.py`):
 
 - `user_id` is always taken from the authenticated session, never from AI output.
-- Inputs are Pydantic-validated exactly like a normal API request.
-- Business rules (e.g. sane weight ranges, sane macro ranges) are re-checked regardless of what the AI produced.
-- Mutating tools that represent a meaningful change surface a confirmation step to the user before committing, unless the user has explicitly pre-authorized that class of action.
+- Inputs are Pydantic-validated exactly like a normal API request — the model's proposed parameters are re-validated at `confirm` against the same bounds as the manual endpoints (e.g. weight 0–500 kg, water 0–5000 ml), so the AI can never produce a value a user couldn't enter by hand.
+- The action set is a fixed allow-list; anything the model returns outside it becomes `none` (nothing to execute).
+- Every mutating action requires an explicit user `confirm` call before it commits; `propose` performs no writes at all.
+- `log_food` reuses the manual food-diary service, so its ownership check (a user cannot log another user's private food) applies unchanged — covered by `test_confirm_cannot_log_another_users_private_food`.
 
-The AI must never be able to: access another user's data, execute arbitrary SQL, bypass application permissions, retrieve secrets, modify security settings, modify billing information, or access arbitrary files. This holds today by construction — there's nothing for the model to call.
+The AI must never be able to: access another user's data, execute arbitrary SQL, bypass application permissions, retrieve secrets, modify security settings, modify billing information, or access arbitrary files. This holds by construction — the write path (`confirm`) never calls the model, and the model can only ever return one of a fixed set of proposals for the requesting user's own data.
 
 ## Prompt injection defense
 
@@ -41,11 +54,11 @@ User-provided text (food-parse input, coach messages, and anything embedded in t
 
 Layers actually implemented:
 
-- Fixed system prompts (`food_parser_service.py`, `coach_service.py`) that explicitly state user content is data, not instructions, and instruct the model to keep parsing/discussing even if the input looks like a command aimed at it.
-- Structured JSON output requested for parsing, validated with Pydantic against `ParsedFoodItem`; free text is only accepted for the coach's conversational replies.
-- Input length limits (`FoodParseRequest.text` ≤ 1000 chars, `CoachMessageCreateRequest.message` ≤ 2000 chars).
-- Output validation after the model responds (schema for parsing; a non-empty, length-capped string for the coach) before anything is shown to the user or stored.
-- No tool permissions exist yet, so there is nothing an injected instruction could invoke even if it succeeded.
+- Fixed system prompts (`food_parser_service.py`, `coach_service.py`, `action_service.py`) that explicitly state user content is data, not instructions, and instruct the model to keep parsing/discussing/mapping even if the input looks like a command aimed at it.
+- Structured JSON output requested for parsing and for action proposals, validated with Pydantic (`ParsedFoodItem`, `RawProposal` + per-action params); free text is only accepted for the coach's conversational replies.
+- Input length limits (`FoodParseRequest.text` ≤ 1000 chars, `CoachMessageCreateRequest.message` ≤ 2000 chars, `ActionProposeRequest.message` ≤ 1000 chars).
+- Output validation after the model responds (schema for parsing/actions; a non-empty, length-capped string for the coach) before anything is shown to the user or stored.
+- A successful injection still can't mutate data: the action write path (`/ai/actions/confirm`) calls no model and requires explicit user confirmation, and even a coerced proposal is re-validated against a fixed allow-list with per-action bounds before the user ever sees a confirm button.
 
 This defends against the *architecture* being exploitable; it does not by itself guarantee any specific free model actually resists injection attempts in practice — that depends on the underlying model and hasn't been adversarially tested against a live provider.
 
@@ -63,6 +76,7 @@ Malformed AI output is never executed against the database — there's no execut
 |---|---|---|---|---|
 | NL food parsing | The food-log text only (e.g. "two eggs and a roti") | Extract structured food items | Per OpenRouter/model-provider policy — not yet independently verified, see `third-party-services.md` | Not confirmed — do not assume "no" without checking the specific model's terms before production |
 | AI coach | The message, plus structured JSON: today's dashboard (calorie/macro/water progress), last 5 weight entries, last 3 workout sessions' start times/notes, and up to the last 20 prior coach messages for conversational context | Answer questions like "why is my weight not changing" | Same as above | Same as above |
+| AI actions (propose) | The user's natural-language request only (e.g. "log a banana for breakfast") — no dashboard or history is sent | Turn the request into ONE structured, confirmable action proposal | Same as above | Same as above |
 
 Never sent to any AI provider: email address, full name, password, authentication tokens, payment information — confirmed by what `coach_service.py`'s context builder actually queries (dashboard/weight/workout repositories only, never the user repository).
 

@@ -21,7 +21,7 @@ Priorities, not a schedule. Do not implement a later phase's features before the
 - AI fitness coach ✅ (`POST /ai/coach/messages`, read-only/advisory — no tool-calling yet, see `docs/ai-safety.md`)
 - Personalized recommendations ✅ (`GET /recommendations`, deterministic/rule-based — no LLM, works with AI disabled; surfaced as "Insights" on the mobile home screen)
 - Mobile UI for AI food parsing + coach ✅ (Coach chat tab and natural-language food logging wired into the mobile app)
-- AI tool-calling for mutating actions (create_meal, log_food, etc. per `docs/ai-safety.md`) — designed, not built; current coach cannot write any data
+- AI tool-calling for mutating actions ✅ built as a propose→confirm flow (`POST /ai/actions/propose`, `POST /ai/actions/confirm`) for `log_weight`/`log_water`/`log_food` — the model only proposes, the deterministic confirm step writes with `user_id` from the session and re-validated bounds (see `docs/ai-safety.md`). `create_workout`/`create_meal` and a mobile UI for this flow are follow-ups. The coach itself still cannot write data.
 
 ## Phase 4
 - Barcode scanning

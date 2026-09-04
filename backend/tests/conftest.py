@@ -6,6 +6,10 @@ from pathlib import Path
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-not-for-production-use-only")
 os.environ.setdefault("RATE_LIMIT_LOGIN_PER_MINUTE", "1000")
 os.environ.setdefault("RATE_LIMIT_DEFAULT_PER_MINUTE", "1000")
+# AI limiter buckets are per-IP and process-global; all tests share one IP, so
+# without a high ceiling the AI endpoints' 20/hour default would couple tests
+# together and flake once enough AI calls accumulate across the session.
+os.environ.setdefault("RATE_LIMIT_AI_PER_HOUR", "10000")
 # Force-disabled (not setdefault) regardless of what a developer's local
 # .env has: pydantic-settings' env_file loading would otherwise leak a real
 # AI_API_KEY into the test run, silently turning "AI disabled" tests into

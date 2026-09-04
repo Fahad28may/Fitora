@@ -12,10 +12,22 @@ from app.schemas.ai import (
     FoodParseRequest,
     FoodParseResponse,
 )
+from app.schemas.ai_actions import (
+    ActionProposeRequest,
+    ActionResultOut,
+    ConfirmActionRequest,
+    ProposedActionOut,
+)
+from app.services.ai.action_service import AIActionService
 from app.services.ai.client import AIClient
 from app.services.ai.coach_service import CoachService
 from app.services.ai.exceptions import AIOutputValidationError, AIProviderError
 from app.services.ai.food_parser_service import FoodParserService
+from app.services.food_diary_service import (
+    FoodNotAccessibleError,
+    FoodNotFoundError,
+    MissingServingSizeError,
+)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -89,6 +101,62 @@ async def send_coach_message(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="The AI coach is temporarily unavailable.",
+        ) from exc
+
+
+@router.post("/actions/propose", response_model=ProposedActionOut)
+@limiter.limit(ai_rate_limit)
+async def propose_action(
+    request: Request,
+    payload: ActionProposeRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    ai_client: AIClient = Depends(_require_ai_client),
+) -> ProposedActionOut:
+    """Translate a natural-language request into a proposed action. This never
+    writes anything — the client must call /actions/confirm to execute it."""
+    settings = get_settings()
+    try:
+        return await AIActionService(db).propose(
+            ai_client=ai_client,
+            model=settings.ai_model_actions,
+            user_id=current_user.id,
+            message=payload.message,
+        )
+    except AIOutputValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Couldn't turn that into an action — try rephrasing, or do it manually.",
+        ) from exc
+    except AIProviderError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI actions are temporarily unavailable — use the normal screens instead.",
+        ) from exc
+
+
+@router.post(
+    "/actions/confirm",
+    response_model=ActionResultOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def confirm_action(
+    payload: ConfirmActionRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ActionResultOut:
+    """Execute a user-confirmed action. Deterministic — no AI is called here,
+    so it works even if AI is disabled, and user_id comes from the session."""
+    try:
+        return await AIActionService(db).confirm(user_id=current_user.id, payload=payload)
+    except (FoodNotFoundError, FoodNotAccessibleError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Food not found"
+        ) from exc
+    except MissingServingSizeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="This food has no serving size on file — log it by grams instead.",
         ) from exc
 
 
