@@ -9,6 +9,7 @@ from app.api.v1.foods import router as foods_router
 from app.api.v1.goals import router as goals_router
 from app.api.v1.measurements import router as measurements_router
 from app.api.v1.profile import router as profile_router
+from app.api.v1.recommendations import router as recommendations_router
 from app.api.v1.water import router as water_router
 from app.api.v1.weight import router as weight_router
 from app.api.v1.workout_sessions import router as workout_sessions_router
@@ -27,4 +28,5 @@ api_router.include_router(exercises_router)
 api_router.include_router(workouts_router)
 api_router.include_router(workout_sessions_router)
 api_router.include_router(dashboard_router)
+api_router.include_router(recommendations_router)
 api_router.include_router(ai_router)

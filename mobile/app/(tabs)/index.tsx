@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { dashboardApi } from "../../src/api/dashboard";
+import type { Recommendation, RecommendationPriority } from "../../src/api/recommendations";
+import { recommendationsApi } from "../../src/api/recommendations";
 import type { DashboardOut } from "../../src/api/types";
 import { waterApi } from "../../src/api/water";
 import { useAuth } from "../../src/auth/AuthContext";
@@ -11,16 +13,29 @@ import { screenStyles } from "./styles";
 
 const QUICK_ADD_WATER_ML = [250, 500];
 
+const PRIORITY_COLOR: Record<RecommendationPriority, string> = {
+  warning: "#dc2626",
+  suggestion: "#2563eb",
+  info: "#059669",
+};
+
 export default function HomeScreen(): React.JSX.Element {
   const { user, logout } = useAuth();
   const [dashboard, setDashboard] = useState<DashboardOut | null>(null);
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const data = await dashboardApi.get();
+      // Recommendations are advisory — a failure there must not blank the
+      // dashboard, so they're fetched independently and tolerate errors.
+      const [data, recs] = await Promise.all([
+        dashboardApi.get(),
+        recommendationsApi.get().catch(() => null),
+      ]);
       setDashboard(data);
+      setRecommendations(recs?.recommendations ?? []);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -127,6 +142,28 @@ export default function HomeScreen(): React.JSX.Element {
             </Text>
           </View>
         </>
+      ) : null}
+
+      {recommendations.length > 0 ? (
+        <View style={screenStyles.card}>
+          <Text style={screenStyles.cardTitle}>Insights</Text>
+          {recommendations.map((rec, index) => (
+            <View
+              key={`${rec.category}-${index}`}
+              style={{
+                borderLeftWidth: 3,
+                borderLeftColor: PRIORITY_COLOR[rec.priority],
+                paddingLeft: 10,
+                gap: 2,
+              }}
+            >
+              <Text style={[screenStyles.body, { fontWeight: "600", color: "#111827" }]}>
+                {rec.title}
+              </Text>
+              <Text style={screenStyles.body}>{rec.detail}</Text>
+            </View>
+          ))}
+        </View>
       ) : null}
 
       <View style={screenStyles.disclaimerBox}>

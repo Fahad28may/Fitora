@@ -19,8 +19,8 @@ Priorities, not a schedule. Do not implement a later phase's features before the
 ## Phase 3 — in progress
 - AI natural-language food parsing ✅ (`POST /ai/parse-food`, OpenRouter)
 - AI fitness coach ✅ (`POST /ai/coach/messages`, read-only/advisory — no tool-calling yet, see `docs/ai-safety.md`)
-- Personalized recommendations — not started
-- Mobile UI for both — not started
+- Personalized recommendations ✅ (`GET /recommendations`, deterministic/rule-based — no LLM, works with AI disabled; surfaced as "Insights" on the mobile home screen)
+- Mobile UI for AI food parsing + coach ✅ (Coach chat tab and natural-language food logging wired into the mobile app)
 - AI tool-calling for mutating actions (create_meal, log_food, etc. per `docs/ai-safety.md`) — designed, not built; current coach cannot write any data
 
 ## Phase 4
