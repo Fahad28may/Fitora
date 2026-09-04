@@ -1,3 +1,4 @@
+from app.models.activity_entry import ActivityEntry, ActivitySource, ActivityType
 from app.models.ai_message import AIMessageRecord, MessageRole
 from app.models.body_measurement import BodyMeasurement
 from app.models.exercise import Exercise, ExerciseDifficulty, ExerciseType
@@ -10,6 +11,9 @@ from app.models.weight_entry import WeightEntry
 from app.models.workout import Workout, WorkoutExercise, WorkoutSession, WorkoutSet, WorkoutType
 
 __all__ = [
+    "ActivityEntry",
+    "ActivitySource",
+    "ActivityType",
     "AIMessageRecord",
     "BodyMeasurement",
     "Exercise",

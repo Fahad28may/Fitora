@@ -14,7 +14,7 @@ Priorities, not a schedule. Do not implement a later phase's features before the
 - Workouts & exercise tracking ✅
 - Progress: measurements ✅, charts (not built), photos — **blocked**, needs an object storage provider decision (credentials) before it can be built, see `docs/third-party-services.md`
 - Water logging ✅
-- Activity tracking (architecture only — real integrations in Phase 4) — not started
+- Activity tracking (architecture only — real integrations in Phase 4) ✅ backend architecture done: `ActivityEntry` model + `/activity-entries` CRUD, manual logging only. `ActivitySource` already models the future `apple_health`/`health_connect`/`wearable` sources so Phase 4 device sync needs no migration. Mobile UI + device integrations deferred to Phase 4.
 
 ## Phase 3 — in progress
 - AI natural-language food parsing ✅ (`POST /ai/parse-food`, OpenRouter)
