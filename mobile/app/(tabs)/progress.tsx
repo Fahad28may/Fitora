@@ -7,8 +7,21 @@ import { measurementsApi } from "../../src/api/measurements";
 import type { WeightEntryOut } from "../../src/api/types";
 import { weightApi } from "../../src/api/weight";
 import { formStyles as s } from "../../src/ui/formStyles";
+import { TrendChart, type TrendPoint } from "../../src/ui/TrendChart";
 import { todayIso } from "../../src/utils/date";
 import { screenStyles } from "./styles";
+
+// API lists are newest-first; charts read oldest-to-newest. Labels are MM-DD.
+function toChronologicalPoints<T>(
+  rows: T[],
+  getDate: (row: T) => string,
+  getValue: (row: T) => number | null,
+): TrendPoint[] {
+  return rows
+    .filter((row) => getValue(row) !== null)
+    .map((row) => ({ label: getDate(row).slice(5), value: getValue(row) as number }))
+    .reverse();
+}
 
 export default function ProgressScreen(): React.JSX.Element {
   const [entries, setEntries] = useState<WeightEntryOut[]>([]);
@@ -88,6 +101,16 @@ export default function ProgressScreen(): React.JSX.Element {
           {!isLoading && entries.length === 0 ? (
             <Text style={screenStyles.body}>No weight entries yet.</Text>
           ) : null}
+
+          <TrendChart
+            title="Weight trend"
+            unit="kg"
+            points={toChronologicalPoints(
+              entries,
+              (e) => e.logged_at,
+              (e) => e.weight_kg,
+            )}
+          />
         </View>
       }
       data={entries}
@@ -212,6 +235,16 @@ function MeasurementsSection({
       >
         {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>Log measurements</Text>}
       </TouchableOpacity>
+
+      <TrendChart
+        title="Waist trend"
+        unit="cm"
+        points={toChronologicalPoints(
+          measurements,
+          (m) => m.logged_at,
+          (m) => m.waist_cm,
+        )}
+      />
 
       {measurements.length === 0 ? (
         <Text style={screenStyles.body}>No measurements logged yet.</Text>
