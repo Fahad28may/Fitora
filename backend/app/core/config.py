@@ -66,9 +66,30 @@ class Settings(BaseSettings):
     )
     rate_limit_ai_per_hour: int = Field(default=20, alias="RATE_LIMIT_AI_PER_HOUR")
 
+    # Object storage for progress photos. S3-compatible; MinIO is the reference
+    # provider (self-hosted, so photos never leave your infrastructure). Same
+    # code works against AWS S3 / R2 / B2 by pointing the endpoint elsewhere.
+    # Unset -> photo endpoints return 503 and the rest of the app is unaffected.
+    s3_endpoint_url: str = Field(default="", alias="S3_ENDPOINT_URL")
+    s3_bucket: str = Field(default="", alias="S3_BUCKET")
+    s3_access_key_id: str = Field(default="", alias="S3_ACCESS_KEY_ID")
+    s3_secret_access_key: str = Field(default="", alias="S3_SECRET_ACCESS_KEY")
+    s3_presigned_url_expiry_seconds: int = Field(
+        default=900, alias="S3_PRESIGNED_URL_EXPIRY_SECONDS"
+    )
+
     @property
     def ai_enabled(self) -> bool:
         return bool(self.ai_api_key)
+
+    @property
+    def storage_enabled(self) -> bool:
+        return bool(
+            self.s3_endpoint_url
+            and self.s3_bucket
+            and self.s3_access_key_id
+            and self.s3_secret_access_key
+        )
 
     @property
     def cors_origins_list(self) -> list[str]:

@@ -10,9 +10,9 @@ Priorities, not a schedule. Do not implement a later phase's features before the
 - Dashboard ("how am I doing today")
 - Weight tracking
 
-## Phase 2 — done, except progress photos
+## Phase 2 — done
 - Workouts & exercise tracking ✅
-- Progress: measurements ✅, charts ✅ (dependency-free weight + waist trend charts on the mobile Progress screen), photos — **blocked**, needs an object storage provider decision (credentials) before it can be built, see `docs/third-party-services.md`
+- Progress: measurements ✅, charts ✅ (dependency-free weight + waist trend charts on the mobile Progress screen), photos ✅ backend done — `/progress-photos` upload/list/delete against S3-compatible object storage (MinIO reference provider), private bucket + presigned URLs + magic-byte/size validation; disabled→503 when unconfigured, like AI. Requires a provisioned bucket + `S3_*` env to run live; mobile UI is a follow-up
 - Water logging ✅
 - Activity tracking (architecture only — real integrations in Phase 4) ✅ backend architecture done: `ActivityEntry` model + `/activity-entries` CRUD, manual logging only. `ActivitySource` already models the future `apple_health`/`health_connect`/`wearable` sources so Phase 4 device sync needs no migration. Mobile UI + device integrations deferred to Phase 4.
 

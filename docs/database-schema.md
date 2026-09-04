@@ -101,11 +101,12 @@ Actual performed instance of a workout (log, not template).
 | id | user_id FK | logged_at | waist_cm, chest_cm, arm_cm, leg_cm, hip_cm (all nullable) |
 
 ### `progress_photos`
-| id | user_id FK | storage_key (private bucket, never a public URL) | taken_at | deleted_at (nullable, soft delete before hard purge) |
+| id | user_id FK, indexed with (user_id, taken_at) | taken_at | storage_key (unique; opaque key in a private bucket, never a public URL) | content_type | size_bytes |
+Delete is immediate and hard — it removes the object from storage and the row (no `deleted_at` soft-delete column). Reads are served only via short-lived presigned URLs generated per request. Access is authorized by row ownership, not key secrecy.
 
 ### `activity_entries`
-| id | user_id FK | source (manual/apple_health/health_connect/wearable) | logged_at | steps (nullable) | active_calories (nullable) | distance_m (nullable) |
-Architecture only in Phase 1; populated once health integrations ship (Phase 4).
+| id | user_id FK, indexed with (user_id, logged_at) | logged_at | activity_type (walking/running/cycling/swimming/strength/sport/other) | duration_min | distance_km (nullable) | steps (nullable) | calories_burned (nullable, user estimate) | source (manual/apple_health/health_connect/wearable) | notes (nullable) |
+Manual logging only in Phase 2 (API always writes `source=manual`); the device sources are modeled now so Phase 4 health integrations populate them without a migration.
 
 ## AI (Phase 3+)
 

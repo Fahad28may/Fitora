@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.services.ai.client import AIClient, OpenRouterClient
+from app.services.storage.base import ObjectStorage
 
 _bearer_scheme = HTTPBearer(auto_error=True)
 
@@ -51,4 +52,23 @@ def get_ai_client() -> AIClient | None:
         api_key=settings.ai_api_key,
         base_url=settings.ai_api_base_url,
         timeout=settings.ai_request_timeout_seconds,
+    )
+
+
+def get_object_storage() -> ObjectStorage | None:
+    """Returns None when object storage isn't configured — photo endpoints
+    turn that into a 503, and the rest of the app is unaffected. The MinIO
+    client is imported lazily so the dependency is only required when storage
+    is actually enabled."""
+    settings = get_settings()
+    if not settings.storage_enabled:
+        return None
+    from app.services.storage.minio_storage import MinioStorage
+
+    return MinioStorage(
+        endpoint_url=settings.s3_endpoint_url,
+        bucket=settings.s3_bucket,
+        access_key=settings.s3_access_key_id,
+        secret_key=settings.s3_secret_access_key,
+        presigned_expiry_seconds=settings.s3_presigned_url_expiry_seconds,
     )

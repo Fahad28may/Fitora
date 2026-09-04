@@ -38,9 +38,9 @@ Status values: `PASS`, `FAIL`, `NEEDS REVIEW`. This checklist existing does **no
 ## Files
 | Item | Status | Notes |
 |---|---|---|
-| Upload validation | NEEDS REVIEW | Not yet implemented |
-| Storage security | NEEDS REVIEW | Provider not yet selected |
-| Access controls | NEEDS REVIEW | |
+| Upload validation | NEEDS REVIEW | Magic-byte image sniff (JPEG/PNG/WebP — client Content-Type not trusted) + 10 MiB size cap enforced in `progress_photo_service`. Deeper validation (full decode / re-encode to strip metadata) is a documented future hardening, not yet done |
+| Storage security | NEEDS REVIEW | MinIO/S3 selected; private bucket required, reads only via short-lived presigned URLs (default 15 min), keys server-side only. Bucket privacy + TLS on the endpoint depend on how ops provisions MinIO — verify before launch |
+| Access controls | PASS | Every photo is authorized by DB row ownership (user_id from session), not by object-key guessability; delete is ownership-checked. Covered by `tests/test_progress_photos.py` |
 
 ## Infrastructure
 | Item | Status | Notes |
