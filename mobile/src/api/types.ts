@@ -110,6 +110,7 @@ export interface FoodOut {
 
 export type MealCategory = "breakfast" | "lunch" | "dinner" | "snack";
 export type LogUnit = "serving" | "gram";
+export type LogSource = "search" | "manual" | "barcode" | "natural_language" | "photo";
 
 export interface FoodDiaryEntryCreateRequest {
   food_id: string;
@@ -117,6 +118,8 @@ export interface FoodDiaryEntryCreateRequest {
   meal_category: MealCategory;
   quantity: number;
   unit: LogUnit;
+  /** How the food was picked. Defaults to "manual" server-side. */
+  source?: LogSource;
 }
 
 export interface FoodDiaryEntryOut {

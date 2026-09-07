@@ -83,6 +83,11 @@ export const formStyles = StyleSheet.create({
     fontSize: 14,
     color: "#dc2626",
   },
+  helpText: {
+    fontSize: 13,
+    color: "#6b7280",
+    lineHeight: 18,
+  },
   warning: {
     fontSize: 13,
     color: "#92400e",

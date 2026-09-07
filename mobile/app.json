@@ -26,6 +26,16 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
-    "plugins": ["expo-router", "expo-secure-store"]
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Fitora uses the camera only to read barcodes on food packaging. Images are processed on your device and never uploaded.",
+          "recordAudioAndroid": false
+        }
+      ]
+    ]
   }
 }

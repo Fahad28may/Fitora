@@ -12,7 +12,14 @@ import { aiApi, type ParsedFoodItemOut } from "../../src/api/ai";
 import { ApiError } from "../../src/api/client";
 import { foodDiaryApi } from "../../src/api/foodDiary";
 import { foodsApi } from "../../src/api/foods";
-import type { FoodDiaryEntryOut, FoodOut, LogUnit, MealCategory } from "../../src/api/types";
+import type {
+  FoodDiaryEntryOut,
+  FoodOut,
+  LogSource,
+  LogUnit,
+  MealCategory,
+} from "../../src/api/types";
+import { BarcodeScanner } from "../../src/ui/BarcodeScanner";
 import { formStyles as s } from "../../src/ui/formStyles";
 import { todayIso } from "../../src/utils/date";
 import { screenStyles } from "./styles";
@@ -28,6 +35,9 @@ export default function NutritionScreen(): React.JSX.Element {
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   const [selectedFood, setSelectedFood] = useState<FoodOut | null>(null);
+  // Provenance of the current selection, recorded on the diary entry so the
+  // diary can tell a scanned food from a searched or AI-parsed one.
+  const [logSource, setLogSource] = useState<LogSource>("search");
   const [quantity, setQuantity] = useState("1");
   const [unit, setUnit] = useState<LogUnit>("serving");
   const [mealCategory, setMealCategory] = useState<MealCategory>("snack");
@@ -35,6 +45,10 @@ export default function NutritionScreen(): React.JSX.Element {
   const [isLogging, setIsLogging] = useState(false);
 
   const [diaryEntries, setDiaryEntries] = useState<FoodDiaryEntryOut[]>([]);
+
+  const [showScanner, setShowScanner] = useState(false);
+  const [isLookingUpBarcode, setIsLookingUpBarcode] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   const [showNLInput, setShowNLInput] = useState(false);
   const [nlText, setNlText] = useState("");
@@ -73,6 +87,36 @@ export default function NutritionScreen(): React.JSX.Element {
   function handleFoodCreated(food: FoodOut): void {
     setShowCreateForm(false);
     setSelectedFood(food);
+    setLogSource("manual");
+  }
+
+  async function handleBarcodeScanned(barcode: string): Promise<void> {
+    setScanError(null);
+    setIsLookingUpBarcode(true);
+    try {
+      const food = await foodsApi.lookupBarcode(barcode);
+      setSelectedFood(food);
+      setLogSource("barcode");
+      setQuantity("1");
+      setUnit("serving");
+      setShowScanner(false);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 503) {
+        setScanError(
+          "Barcode lookup isn't configured on this server — search for the food by name instead.",
+        );
+      } else if (err instanceof ApiError && err.status === 404) {
+        setScanError("That product isn't in the food database. You can add it as a custom food.");
+      } else if (err instanceof ApiError && err.status === 422) {
+        setScanError(
+          "That product's nutrition data looked wrong, so it wasn't imported. Add it manually from the label.",
+        );
+      } else {
+        setScanError(err instanceof ApiError ? err.message : "Barcode lookup failed.");
+      }
+    } finally {
+      setIsLookingUpBarcode(false);
+    }
   }
 
   async function handleParse(): Promise<void> {
@@ -98,6 +142,7 @@ export default function NutritionScreen(): React.JSX.Element {
 
   function handleSelectParsedMatch(item: ParsedFoodItemOut, food: FoodOut): void {
     setSelectedFood(food);
+    setLogSource("natural_language");
     setQuantity(String(item.quantity));
     setUnit("serving");
     setShowNLInput(false);
@@ -116,6 +161,7 @@ export default function NutritionScreen(): React.JSX.Element {
         meal_category: mealCategory,
         quantity: Number(quantity),
         unit,
+        source: logSource,
       });
       setSelectedFood(null);
       setQuantity("1");
@@ -140,6 +186,29 @@ export default function NutritionScreen(): React.JSX.Element {
       ListHeaderComponent={
         <View style={{ gap: 12, marginBottom: 8 }}>
           <Text style={screenStyles.title}>Nutrition</Text>
+
+          <TouchableOpacity
+            onPress={() => {
+              setScanError(null);
+              setShowScanner((v) => !v);
+              setShowNLInput(false);
+            }}
+          >
+            <Text style={s.secondaryButtonText}>
+              {showScanner ? "Close scanner" : "Scan a barcode"}
+            </Text>
+          </TouchableOpacity>
+
+          {showScanner ? (
+            <BarcodeScanner
+              onScanned={(barcode) => void handleBarcodeScanned(barcode)}
+              onCancel={() => setShowScanner(false)}
+              isBusy={isLookingUpBarcode}
+            />
+          ) : null}
+          {/* Outside the scanner block: a failed lookup closes nothing, and a
+              503 needs to stay readable after the user closes the camera. */}
+          {scanError ? <Text style={s.error}>{scanError}</Text> : null}
 
           <TouchableOpacity onPress={() => setShowNLInput((v) => !v)}>
             <Text style={s.secondaryButtonText}>
@@ -213,7 +282,10 @@ export default function NutritionScreen(): React.JSX.Element {
             <TouchableOpacity
               key={food.id}
               style={s.card}
-              onPress={() => setSelectedFood(food)}
+              onPress={() => {
+                setSelectedFood(food);
+                setLogSource("search");
+              }}
             >
               <Text style={screenStyles.cardTitle}>{food.name}</Text>
               <Text style={screenStyles.body}>
@@ -235,6 +307,12 @@ export default function NutritionScreen(): React.JSX.Element {
           {selectedFood ? (
             <View style={[s.card, { gap: 10 }]}>
               <Text style={screenStyles.cardTitle}>Log {selectedFood.name}</Text>
+              {selectedFood.source === "external_db" ? (
+                <Text style={s.warning}>
+                  These numbers come from Open Food Facts, a crowd-sourced database. Worth a
+                  glance against the label before you log it.
+                </Text>
+              ) : null}
 
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <TextInput

@@ -24,6 +24,12 @@ Data minimization is a core rule: if a piece of data isn't needed for a specific
 
 Some features (natural-language food logging, the AI coach, optional photo food recognition) send a minimum-necessary subset of your data to an AI provider to generate a response. We never send your email, full name, password, authentication tokens, or payment information to an AI provider. Full detail: [`ai-safety.md`](ai-safety.md).
 
+## 4a. Camera and barcode scanning
+
+If you use barcode scanning, the app asks for camera permission. The camera is used only to read the barcode: frames are decoded on your device, no image is recorded, and no image is ever uploaded. The only thing that leaves your phone is the barcode number itself, which the server sends to the food database provider to look up the product. That request carries no account identifier — see [`third-party-services.md`](third-party-services.md).
+
+Barcode lookup is optional. If the server operator has not configured a food database provider, scanning is unavailable and no barcode is ever sent anywhere.
+
 ## 5. Third-party providers
 
 Listed, with what they receive and why, in [`third-party-services.md`](third-party-services.md). We review each provider's data-processing terms before integrating them.
