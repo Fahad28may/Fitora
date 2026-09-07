@@ -65,6 +65,11 @@ class Settings(BaseSettings):
         default=20.0, alias="AI_REQUEST_TIMEOUT_SECONDS"
     )
     rate_limit_ai_per_hour: int = Field(default=20, alias="RATE_LIMIT_AI_PER_HOUR")
+    # Export and account deletion each touch every table the user owns, so
+    # they are capped well below the default per-minute allowance.
+    rate_limit_account_per_hour: int = Field(
+        default=5, alias="RATE_LIMIT_ACCOUNT_PER_HOUR"
+    )
 
     # Food database provider for barcode lookup. Open Food Facts is a free,
     # open-data product database that needs no account or API key -- only a

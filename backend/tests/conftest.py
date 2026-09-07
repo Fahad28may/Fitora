@@ -16,6 +16,7 @@ os.environ.setdefault("RATE_LIMIT_AI_PER_HOUR", "10000")
 # real, quota-consuming calls to the actual provider.
 os.environ["AI_API_KEY"] = ""
 os.environ.setdefault("RATE_LIMIT_BARCODE_PER_HOUR", "10000")
+os.environ.setdefault("RATE_LIMIT_ACCOUNT_PER_HOUR", "10000")
 # Same reasoning as AI_API_KEY above: a developer with FOOD_DB_PROVIDER set in
 # their .env would otherwise turn the "barcode lookup disabled" test into a
 # real request to Open Food Facts.

@@ -13,3 +13,4 @@ limiter = Limiter(
 login_rate_limit = f"{settings.rate_limit_login_per_minute}/minute"
 ai_rate_limit = f"{settings.rate_limit_ai_per_hour}/hour"
 barcode_rate_limit = f"{settings.rate_limit_barcode_per_hour}/hour"
+account_rate_limit = f"{settings.rate_limit_account_per_hour}/hour"

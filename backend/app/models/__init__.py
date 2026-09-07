@@ -1,5 +1,6 @@
 from app.models.activity_entry import ActivityEntry, ActivitySource, ActivityType
 from app.models.ai_message import AIMessageRecord, MessageRole
+from app.models.audit import AuditEvent, AuditEventType, ConsentRecord, ConsentType
 from app.models.body_measurement import BodyMeasurement
 from app.models.exercise import Exercise, ExerciseDifficulty, ExerciseType
 from app.models.goal import Goal
@@ -16,6 +17,10 @@ __all__ = [
     "ActivitySource",
     "ActivityType",
     "AIMessageRecord",
+    "AuditEvent",
+    "AuditEventType",
+    "ConsentRecord",
+    "ConsentType",
     "BodyMeasurement",
     "Exercise",
     "ExerciseDifficulty",
