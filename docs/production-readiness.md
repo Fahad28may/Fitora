@@ -50,7 +50,7 @@ Status values: `PASS`, `FAIL`, `NEEDS REVIEW`. This checklist existing does **no
 | Security headers / API hardening | PASS | nosniff, X-Frame-Options, Referrer-Policy, CORP, Permissions-Policy and a deny-all CSP on every response; HSTS only when the request arrived over HTTPS; 12 MiB request-body cap. Covered by `tests/test_security_headers.py` |
 | Secrets | NEEDS REVIEW | `.env.example` in place, real secret management TBD |
 | Database | NEEDS REVIEW | |
-| Backups | NEEDS REVIEW | Not yet implemented |
+| Backups | FAIL | Designed in `backups-and-recovery.md` (method, encryption, retention, RPO/RTO, drill procedure, failure scenarios) but **nothing is implemented and no restoration has ever been tested**. Blocked on hosting/database provider selection. Marked FAIL rather than NEEDS REVIEW because an unbacked-up production database is a known defect, not an open question |
 | Logging | NEEDS REVIEW | Structured JSON logs, no secrets. Security-sensitive operations additionally recorded in `audit_events` (register, login success/failure, logout, consent change, export, deletion); the email on a failed login is hashed, never stored raw. Log shipping/retention not yet decided |
 | Monitoring | NEEDS REVIEW | Not yet implemented |
 

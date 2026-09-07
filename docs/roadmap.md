@@ -32,7 +32,7 @@ Priorities, not a schedule. Do not implement a later phase's features before the
 - Charts ✅ §16 — all six the spec names: weight and waist (existing), plus calories, protein and activity from `GET /dashboard/history`, and weekly workout volume + per-exercise strength from the workout-progress endpoints
 - Dashboard completeness ✅ §4 — now includes today's activity (steps/duration/burn) and today's workout sessions with volume
 - Workout progress ✅ §14 — `GET /workouts/progress` (personal records, weekly volume, training frequency) and `/workouts/progress/exercises/{id}` (strength progression), surfaced on the Workout tab
-- Backups & disaster recovery ⬜ §60 — not designed
+- Backups & disaster recovery ◐ §60 — designed in `docs/backups-and-recovery.md`; **not implemented**, blocked on hosting/database provider selection. No restoration has been tested
 - Email verification / password reset ⬜ §21 — needs an email provider (credential decision)
 - Frontend tests ✅ §48 — jest-expo + React Native Testing Library, 35 tests across API-client behaviour, component (BarcodeScanner), screen (Settings), and form validation (register). Wired into CI as a required step
 - Accessibility ✅ §44 — every interactive element across the app has an accessible name, selection state is exposed via `accessibilityState` rather than colour alone, and recommendation priority now carries a text label as well as a coloured rule. A static test fails the build if a new control ships without a name. Contrast and reduced-motion review still outstanding

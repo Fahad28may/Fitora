@@ -36,7 +36,9 @@ Listed, with what they receive and why, in [`third-party-services.md`](third-par
 
 ## 6. Data retention
 
-Data is retained while your account is active. On account deletion, your data is deleted or anonymized per the process in [`data-flow.md`](data-flow.md#account-deletion-flow). Backups persist for a defined rotation window after deletion — see the same document.
+Data is retained while your account is active. On account deletion, your data is deleted or anonymized per the process in [`data-flow.md`](data-flow.md#account-deletion-flow).
+
+Backups: Fitora does not currently run automated backups. The intended design — including how long backups would retain data after you delete your account — is in [`backups-and-recovery.md`](backups-and-recovery.md). When backups are implemented, deleted data will persist in them for the retention window stated there, and this section will be updated to say so. We would rather tell you this than imply a safety net that does not exist.
 
 ## 7. Data deletion & export
 
