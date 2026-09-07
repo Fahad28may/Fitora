@@ -47,6 +47,7 @@ Status values: `PASS`, `FAIL`, `NEEDS REVIEW`. This checklist existing does **no
 ## Infrastructure
 | Item | Status | Notes |
 |---|---|---|
+| Rate limiting | NEEDS REVIEW | Keyed on the real client IP, resolved from `X-Forwarded-For` by counting from the right — only when `TRUSTED_PROXY_COUNT` says how many proxies exist, so a client cannot spoof a fresh bucket. Counters are shared via `REDIS_URL`; unset means per-process, which multiplies every limit by the instance count. Both settings default to the safe-but-single-instance choice and log at startup in production when unset. Degrades to in-memory limiting if Redis is unreachable rather than failing the request. Covered by `tests/test_client_ip.py` and `tests/test_rate_limit.py`. NEEDS REVIEW because correctness depends on deployment config being right, and per-account (not just per-IP) login limiting is still not implemented |
 | Security headers / API hardening | PASS | nosniff, X-Frame-Options, Referrer-Policy, CORP, Permissions-Policy and a deny-all CSP on every response; HSTS only when the request arrived over HTTPS; 12 MiB request-body cap. Covered by `tests/test_security_headers.py` |
 | Secrets | NEEDS REVIEW | `.env.example` in place, real secret management TBD |
 | Database | NEEDS REVIEW | |

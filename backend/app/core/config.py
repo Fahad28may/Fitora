@@ -22,7 +22,16 @@ class Settings(BaseSettings):
         default="sqlite:///./fitora_dev.db", alias="DATABASE_URL_SYNC"
     )
 
-    redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
+    # Empty by default, like every other optional backing service here.
+    # A non-empty default would make every dev machine and CI run try to
+    # reach a Redis that isn't there.
+    redis_url: str = Field(default="", alias="REDIS_URL")
+
+    # How many reverse proxies sit in front of the app. 0 = exposed directly
+    # (also correct for local dev). Vercel/Cloudflare/a single nginx = 1.
+    # Used ONLY to work out the real client IP for rate limiting — see
+    # app/core/client_ip.py for why the exact number matters.
+    trusted_proxy_count: int = Field(default=0, alias="TRUSTED_PROXY_COUNT", ge=0, le=10)
 
     jwt_secret_key: str = Field(default="", alias="JWT_SECRET_KEY")
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
@@ -111,6 +120,23 @@ class Settings(BaseSettings):
     s3_presigned_url_expiry_seconds: int = Field(
         default=900, alias="S3_PRESIGNED_URL_EXPIRY_SECONDS"
     )
+
+    @property
+    def rate_limit_storage_uri(self) -> str:
+        """Where rate-limit counters live.
+
+        In-memory counters are per-process, so on any multi-instance
+        deployment (serverless especially) a "5 logins per minute" limit
+        becomes 5 per minute *per instance* — brute-force protection that
+        weakens exactly as the platform scales up under load. Redis makes the
+        counters shared. Falls back to memory when unset, which is right for
+        local dev and tests and is warned about at startup in production.
+        """
+        return self.redis_url or "memory://"
+
+    @property
+    def rate_limiting_is_shared(self) -> bool:
+        return bool(self.redis_url)
 
     @property
     def ai_enabled(self) -> bool:

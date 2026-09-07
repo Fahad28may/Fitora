@@ -97,6 +97,10 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 
 @app.get("/health", tags=["health"])
+# Exempt from the default limit: load balancers and uptime checks poll this
+# constantly, and a health endpoint that starts 429ing under its own
+# monitoring reports the service as down when it is fine.
+@limiter.exempt  # type: ignore[untyped-decorator]  # slowapi ships no annotations
 async def health() -> dict[str, str]:
     return {"status": "ok"}
 
