@@ -15,6 +15,11 @@ os.environ.setdefault("RATE_LIMIT_AI_PER_HOUR", "10000")
 # AI_API_KEY into the test run, silently turning "AI disabled" tests into
 # real, quota-consuming calls to the actual provider.
 os.environ["AI_API_KEY"] = ""
+os.environ.setdefault("RATE_LIMIT_BARCODE_PER_HOUR", "10000")
+# Same reasoning as AI_API_KEY above: a developer with FOOD_DB_PROVIDER set in
+# their .env would otherwise turn the "barcode lookup disabled" test into a
+# real request to Open Food Facts.
+os.environ["FOOD_DB_PROVIDER"] = ""
 
 import pytest
 from httpx import ASGITransport, AsyncClient

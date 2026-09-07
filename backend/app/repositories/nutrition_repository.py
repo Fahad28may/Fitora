@@ -81,8 +81,83 @@ class FoodRepository:
         row = result.first()
         return (row[0], row[1]) if row else None
 
+    async def find_by_barcode(self, barcode: str) -> tuple[Food, FoodNutrition] | None:
+        """Local cache lookup for a barcode, so a repeat scan of the same
+        product does not hit the external provider again.
+
+        Only shared (system / external-db) rows are considered: a user-created
+        food is private to its owner, so matching one here would leak its
+        existence to whoever else scans that barcode. Ordered by creation so a
+        duplicate row -- possible if two scans of an uncached barcode race --
+        still resolves to the same product every time.
+        """
+        stmt = (
+            select(Food, FoodNutrition)
+            .join(FoodNutrition, FoodNutrition.food_id == Food.id)
+            .where(
+                Food.barcode == barcode,
+                Food.source.in_([FoodSource.SYSTEM, FoodSource.EXTERNAL_DB]),
+            )
+            .order_by(Food.created_at)
+            .limit(1)
+        )
+        result = await self.db.execute(stmt)
+        row = result.first()
+        return (row[0], row[1]) if row else None
+
+    async def create_external_food(
+        self,
+        *,
+        barcode: str,
+        name: str,
+        brand: str | None,
+        serving_description: str,
+        serving_grams: float,
+        per_grams: float,
+        calories_kcal: float,
+        protein_g: float,
+        carbs_g: float,
+        fat_g: float,
+        fiber_g: float | None,
+    ) -> tuple[Food, FoodNutrition]:
+        """Persist a product fetched from an external database. No
+        `owner_user_id`: the row is public product data, not user data, so it
+        must not be caught up in a user's cascade delete."""
+        food = Food(
+            source=FoodSource.EXTERNAL_DB,
+            owner_user_id=None,
+            name=name,
+            brand=brand,
+            barcode=barcode,
+            serving_description=serving_description,
+            serving_grams=serving_grams,
+        )
+        self.db.add(food)
+        await self.db.flush()
+
+        nutrition = FoodNutrition(
+            food_id=food.id,
+            per_grams=per_grams,
+            calories_kcal=calories_kcal,
+            protein_g=protein_g,
+            carbs_g=carbs_g,
+            fat_g=fat_g,
+            fiber_g=fiber_g,
+        )
+        self.db.add(nutrition)
+        await self.db.flush()
+        return food, nutrition
+
     async def is_readable_by(self, food: Food, user_id: UUID) -> bool:
-        return food.source == FoodSource.SYSTEM or food.owner_user_id == user_id
+        # System and external-database foods are shared reference data (public
+        # product facts, no owner); user foods are private to their owner.
+        #
+        # Note this makes an external food readable by id to any authenticated
+        # user, which is intended -- but `search` deliberately does not return
+        # them, so one user cannot enumerate what another has scanned.
+        if food.source in (FoodSource.SYSTEM, FoodSource.EXTERNAL_DB):
+            return True
+        return food.owner_user_id == user_id
 
 
 class FoodDiaryRepository:

@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.services.ai.client import AIClient, OpenRouterClient
+from app.services.food_db.client import FoodDbClient, OpenFoodFactsClient
 from app.services.storage.base import ObjectStorage
 
 _bearer_scheme = HTTPBearer(auto_error=True)
@@ -52,6 +53,22 @@ def get_ai_client() -> AIClient | None:
         api_key=settings.ai_api_key,
         base_url=settings.ai_api_base_url,
         timeout=settings.ai_request_timeout_seconds,
+    )
+
+
+def get_food_db_client() -> FoodDbClient | None:
+    """Returns None when no food database is configured -- barcode endpoints
+    turn that into a 503, and manual/custom food entry still works.
+
+    Opt-in by design: a lookup sends the scanned barcode to a third party, so
+    it stays off until an operator sets FOOD_DB_PROVIDER."""
+    settings = get_settings()
+    if not settings.food_db_enabled:
+        return None
+    return OpenFoodFactsClient(
+        base_url=settings.food_db_base_url,
+        timeout=settings.food_db_request_timeout_seconds,
+        user_agent=settings.food_db_user_agent,
     )
 
 

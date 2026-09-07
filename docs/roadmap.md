@@ -23,8 +23,8 @@ Priorities, not a schedule. Do not implement a later phase's features before the
 - Mobile UI for AI food parsing + coach ✅ (Coach chat tab and natural-language food logging wired into the mobile app)
 - AI tool-calling for mutating actions ✅ built as a propose→confirm flow (`POST /ai/actions/propose`, `POST /ai/actions/confirm`) for `log_weight`/`log_water`/`log_food` — the model only proposes, the deterministic confirm step writes with `user_id` from the session and re-validated bounds (see `docs/ai-safety.md`). `create_workout`/`create_meal` and a mobile UI for this flow are follow-ups. The coach itself still cannot write data.
 
-## Phase 4
-- Barcode scanning
+## Phase 4 — in progress
+- Barcode scanning ✅ backend done — `GET /foods/barcode/{barcode}` against Open Food Facts (free, no API key). Crowd-sourced nutrition is validated against plausibility bounds before import, results are cached in the local `foods` table, and the provider is opt-in (`FOOD_DB_PROVIDER`) so no barcode leaves the server by default. Mobile scanner UI is a follow-up
 - Food photo recognition
 - Apple Health / Android Health Connect / wearable integrations
 

@@ -66,6 +66,31 @@ class Settings(BaseSettings):
     )
     rate_limit_ai_per_hour: int = Field(default=20, alias="RATE_LIMIT_AI_PER_HOUR")
 
+    # Food database provider for barcode lookup. Open Food Facts is a free,
+    # open-data product database that needs no account or API key -- only a
+    # descriptive User-Agent, which their terms require so they can contact
+    # heavy API users. Unset -> barcode endpoints return 503 and the rest of
+    # the app is unaffected.
+    #
+    # Opt-in rather than on-by-default: scanning sends the barcode to a third
+    # party, and a privacy-first app should not start making outbound requests
+    # about what a user eats without the operator explicitly turning it on.
+    food_db_provider: str = Field(default="", alias="FOOD_DB_PROVIDER")
+    food_db_api_key: str = Field(default="", alias="FOOD_DB_API_KEY")
+    food_db_base_url: str = Field(
+        default="https://world.openfoodfacts.org", alias="FOOD_DB_BASE_URL"
+    )
+    food_db_request_timeout_seconds: float = Field(
+        default=10.0, alias="FOOD_DB_REQUEST_TIMEOUT_SECONDS"
+    )
+    food_db_user_agent: str = Field(
+        default="Fitora/0.1 (https://github.com/Fahad28may/Fitora)",
+        alias="FOOD_DB_USER_AGENT",
+    )
+    rate_limit_barcode_per_hour: int = Field(
+        default=120, alias="RATE_LIMIT_BARCODE_PER_HOUR"
+    )
+
     # Object storage for progress photos. S3-compatible; MinIO is the reference
     # provider (self-hosted, so photos never leave your infrastructure). Same
     # code works against AWS S3 / R2 / B2 by pointing the endpoint elsewhere.
@@ -81,6 +106,10 @@ class Settings(BaseSettings):
     @property
     def ai_enabled(self) -> bool:
         return bool(self.ai_api_key)
+
+    @property
+    def food_db_enabled(self) -> bool:
+        return bool(self.food_db_provider)
 
     @property
     def storage_enabled(self) -> bool:

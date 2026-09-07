@@ -1,20 +1,44 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_food_db_client
+from app.core.rate_limit import barcode_rate_limit, limiter
 from app.db.session import get_db
 from app.models.nutrition import Food, FoodNutrition
 from app.models.user import User
 from app.repositories.nutrition_repository import FoodRepository
 from app.schemas.nutrition import FoodCreateRequest, FoodOut
+from app.services.food_db.barcode_service import BarcodeLookupService
+from app.services.food_db.client import FoodDbClient
+from app.services.food_db.exceptions import (
+    FoodDbProviderError,
+    ProductNotFoundError,
+    UnusableProductDataError,
+)
 
 router = APIRouter(prefix="/foods", tags=["nutrition"])
 
 MAX_PAGE_SIZE = 50
 DEFAULT_PAGE_SIZE = 20
 MIN_SEARCH_LENGTH = 2
+
+_FOOD_DB_DISABLED_DETAIL = (
+    "Barcode lookup is not configured on this server. Food search and manual "
+    "entry work without it — see docs/third-party-services.md."
+)
+
+
+def _require_food_db_client(
+    client: FoodDbClient | None = Depends(get_food_db_client),
+) -> FoodDbClient:
+    if client is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=_FOOD_DB_DISABLED_DETAIL,
+        )
+    return client
 
 
 def _to_food_out(food: Food, nutrition: FoodNutrition) -> FoodOut:
@@ -70,6 +94,47 @@ async def create_custom_food(
         fat_g=payload.fat_g,
         fiber_g=payload.fiber_g,
     )
+
+
+@router.get("/barcode/{barcode}", response_model=FoodOut)
+@limiter.limit(barcode_rate_limit)
+async def lookup_food_by_barcode(
+    request: Request,
+    barcode: str = Path(pattern=r"^\d{6,14}$"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    client: FoodDbClient = Depends(_require_food_db_client),
+) -> FoodOut:
+    """Resolve a scanned barcode to a food, fetching it from the configured
+    food database on a cache miss.
+
+    The result has `source == "external_db"`, which the client should use to
+    show that the numbers come from a crowd-sourced database and are worth a
+    glance against the package before logging.
+    """
+    try:
+        food, nutrition = await BarcodeLookupService(db, client).lookup(barcode)
+    except ProductNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="That barcode isn't in the food database — you can add it as a custom food.",
+        ) from exc
+    except UnusableProductDataError as exc:
+        # Deliberately not a 404: the product exists, its nutrition data is
+        # just not trustworthy enough to feed into calorie targets.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                "That product's nutrition data is incomplete or implausible, so it "
+                "wasn't imported — add it as a custom food from the label instead."
+            ),
+        ) from exc
+    except FoodDbProviderError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Barcode lookup is temporarily unavailable — try again or log manually.",
+        ) from exc
+    return _to_food_out(food, nutrition)
 
 
 @router.get("/{food_id}", response_model=FoodOut)
