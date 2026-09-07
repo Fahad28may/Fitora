@@ -10,6 +10,7 @@ from slowapi.errors import RateLimitExceeded
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.core.middleware import RequestSizeLimitMiddleware, SecurityHeadersMiddleware
 from app.core.rate_limit import limiter
 
 configure_logging()
@@ -28,6 +29,10 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
+# Order matters: Starlette wraps so that the LAST middleware added is the
+# OUTERMOST. Security headers must therefore be added last, so they also land
+# on responses that never reach the router — a 413 from the size limit below,
+# or a CORS preflight rejection.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
@@ -35,6 +40,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
+app.add_middleware(RequestSizeLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 @app.exception_handler(RequestValidationError)
