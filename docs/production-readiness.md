@@ -53,6 +53,14 @@ Status values: `PASS`, `FAIL`, `NEEDS REVIEW`. This checklist existing does **no
 | Logging | NEEDS REVIEW | Structured JSON logs, no secrets. Security-sensitive operations additionally recorded in `audit_events` (register, login success/failure, logout, consent change, export, deletion); the email on a failed login is hashed, never stored raw. Log shipping/retention not yet decided |
 | Monitoring | NEEDS REVIEW | Not yet implemented |
 
+## Testing
+| Item | Status | Notes |
+|---|---|---|
+| Backend (unit, integration, API, authz, authn, DB) | PASS | 227 tests, run in CI |
+| Frontend (component, screen, navigation, form validation) | NEEDS REVIEW | 35 tests covering the API client, BarcodeScanner, Settings → Privacy, and register-form validation, run in CI. Coverage is real but narrow — most screens are still untested |
+| Security (unauthorized access, IDOR, tokens, rate limits, uploads, injection) | NEEDS REVIEW | Covered by `tests/test_security.py`, per-feature ownership tests, `test_progress_photos.py`, and `test_security_headers.py`. No external pen-test |
+| AI (injection, unsafe health questions, malformed output, tool authorization) | NEEDS REVIEW | Architectural tests in place and one live adversarial session against the real model; not a systematic red-team |
+
 ## Legal
 | Item | Status | Notes |
 |---|---|---|

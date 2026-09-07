@@ -30,8 +30,8 @@ Priorities, not a schedule. Do not implement a later phase's features before the
 - Security headers + request size limit ✅ §59
 - Backups & disaster recovery ⬜ §60 — not designed
 - Email verification / password reset ⬜ §21 — needs an email provider (credential decision)
-- Frontend tests ⬜ §48 — mobile currently has none
-- Accessibility ⬜ §44 — partial; only the Settings screen has labels so far
+- Frontend tests ✅ §48 — jest-expo + React Native Testing Library, 35 tests across API-client behaviour, component (BarcodeScanner), screen (Settings), and form validation (register). Wired into CI as a required step
+- Accessibility ⬜ §44 — partial; Settings and the barcode scanner have labels, the rest of the app does not
 - Offline resilience ⬜ §46 — not started
 
 ## Phase 4 — in progress

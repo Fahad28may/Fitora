@@ -79,6 +79,9 @@ jobs:
       - name: Type check (tsc)
         run: npm run typecheck
 
+      - name: Test (jest)
+        run: npm run test:ci
+
       - name: Dependency vulnerability audit
         run: npm audit --audit-level=high
 

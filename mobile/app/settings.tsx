@@ -286,6 +286,10 @@ export default function SettingsScreen(): React.JSX.Element {
           <TouchableOpacity
             onPress={() => setShowDeleteForm(true)}
             accessibilityRole="button"
+            // Distinct from the "Delete my account permanently" button this
+            // reveals; two controls reading identically is a screen-reader
+            // trap, not just an ambiguous test query.
+            accessibilityLabel="Start deleting my account"
           >
             <Text style={[s.secondaryButtonText, { color: "#dc2626" }]}>
               Delete my account
