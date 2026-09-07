@@ -21,6 +21,7 @@ Status values: `PASS`, `FAIL`, `NEEDS REVIEW`. This checklist existing does **no
 | Item | Status | Notes |
 |---|---|---|
 | Encryption (at rest/in transit) | NEEDS REVIEW | Depends on hosting provider selection |
+| Pagination / query bounds | PASS | Every list endpoint is bounded: food/exercise search take limit+offset (max 50), history is capped at 90 days, workout progress at 52 weeks, and the dashboard's session scan is limited. No endpoint returns an unbounded history |
 | Data minimization | NEEDS REVIEW | Schema designed with this in mind — see `database-schema.md`. Outbound requests are scoped deliberately: barcode lookup sends only the barcode, AI coach sends only already-user-scoped app data (never email/name/tokens) |
 | Retention | NEEDS REVIEW | Defined in `data-flow.md`. Account deletion is now enforced by code; time-based retention windows (session/IP-hash rolling window, backup expiry) are still documentation only |
 | Deletion | PASS | `DELETE /account` removes the account and every row it owns, plus progress-photo objects in storage. Requires the current password *and* a typed confirmation phrase, so a stolen session alone can't destroy an account. Rows are deleted explicitly in dependency order rather than by DB cascade (a RESTRICT FK could block cascade ordering, and SQLite doesn't enforce FKs so a cascade version would only fail in production). Audit and consent records are anonymized, not erased. Covered by `tests/test_account.py` |

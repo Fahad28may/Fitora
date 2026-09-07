@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 import { ApiError } from "../../src/api/client";
+import { historyApi, type HistoryOut } from "../../src/api/history";
 import type { BodyMeasurementOut } from "../../src/api/measurements";
 import { measurementsApi } from "../../src/api/measurements";
 import type { WeightEntryOut } from "../../src/api/types";
@@ -31,12 +32,17 @@ export default function ProgressScreen(): React.JSX.Element {
   const [isLoading, setIsLoading] = useState(true);
 
   const [measurements, setMeasurements] = useState<BodyMeasurementOut[]>([]);
+  const [history, setHistory] = useState<HistoryOut | null>(null);
 
   const load = useCallback(async () => {
-    const [weightData, measurementData] = await Promise.all([
+    const [weightData, measurementData, historyData] = await Promise.all([
       weightApi.list(),
       measurementsApi.list(),
+      // Charts are secondary; a failure there must not blank the log below,
+      // which is the screen's actual job.
+      historyApi.get().catch(() => null),
     ]);
+    setHistory(historyData);
     setEntries(weightData);
     setMeasurements(measurementData);
     setIsLoading(false);
@@ -111,6 +117,37 @@ export default function ProgressScreen(): React.JSX.Element {
               (e) => e.weight_kg,
             )}
           />
+
+          {/* History points arrive oldest-first already, and include days
+              with nothing logged so a gap reads as a gap. */}
+          {history !== null ? (
+            <>
+              <TrendChart
+                title="Calories"
+                unit=" kcal"
+                points={history.points.map((p) => ({
+                  label: p.date.slice(5),
+                  value: p.calories_kcal,
+                }))}
+              />
+              <TrendChart
+                title="Protein"
+                unit="g"
+                points={history.points.map((p) => ({
+                  label: p.date.slice(5),
+                  value: p.protein_g,
+                }))}
+              />
+              <TrendChart
+                title="Activity"
+                unit=" min"
+                points={history.points.map((p) => ({
+                  label: p.date.slice(5),
+                  value: p.activity_minutes,
+                }))}
+              />
+            </>
+          ) : null}
         </View>
       }
       data={entries}
