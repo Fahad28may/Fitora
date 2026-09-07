@@ -167,3 +167,22 @@ export interface DashboardOut {
   latest_weight_kg: number | null;
   latest_weight_logged_at: string | null;
 }
+
+export type ConsentType =
+  | "health_data"
+  | "ai_processing"
+  | "wearable_access"
+  | "analytics";
+
+export interface ConsentState {
+  policy_version: string;
+  /** Every consent type, defaulting to false — nothing is ever pre-selected. */
+  consents: Record<ConsentType, boolean>;
+}
+
+export interface SecurityEvent {
+  id: string;
+  event_type: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}

@@ -22,9 +22,9 @@ Status values: `PASS`, `FAIL`, `NEEDS REVIEW`. This checklist existing does **no
 |---|---|---|
 | Encryption (at rest/in transit) | NEEDS REVIEW | Depends on hosting provider selection |
 | Data minimization | NEEDS REVIEW | Schema designed with this in mind — see `database-schema.md`. Outbound requests are scoped deliberately: barcode lookup sends only the barcode, AI coach sends only already-user-scoped app data (never email/name/tokens) |
-| Retention | NEEDS REVIEW | Defined in `data-flow.md`, not yet enforced by code |
-| Deletion | NEEDS REVIEW | |
-| Export | NEEDS REVIEW | |
+| Retention | NEEDS REVIEW | Defined in `data-flow.md`. Account deletion is now enforced by code; time-based retention windows (session/IP-hash rolling window, backup expiry) are still documentation only |
+| Deletion | PASS | `DELETE /account` removes the account and every row it owns, plus progress-photo objects in storage. Requires the current password *and* a typed confirmation phrase, so a stolen session alone can't destroy an account. Rows are deleted explicitly in dependency order rather than by DB cascade (a RESTRICT FK could block cascade ordering, and SQLite doesn't enforce FKs so a cascade version would only fail in production). Audit and consent records are anonymized, not erased. Covered by `tests/test_account.py` |
+| Export | PASS | `GET /account/export` returns every category of user data as JSON, credentials excluded (asserted by test). Reachable from Settings → Privacy in the app |
 
 ## AI
 | Item | Status | Notes |
@@ -46,10 +46,11 @@ Status values: `PASS`, `FAIL`, `NEEDS REVIEW`. This checklist existing does **no
 ## Infrastructure
 | Item | Status | Notes |
 |---|---|---|
+| Security headers / API hardening | PASS | nosniff, X-Frame-Options, Referrer-Policy, CORP, Permissions-Policy and a deny-all CSP on every response; HSTS only when the request arrived over HTTPS; 12 MiB request-body cap. Covered by `tests/test_security_headers.py` |
 | Secrets | NEEDS REVIEW | `.env.example` in place, real secret management TBD |
 | Database | NEEDS REVIEW | |
 | Backups | NEEDS REVIEW | Not yet implemented |
-| Logging | NEEDS REVIEW | |
+| Logging | NEEDS REVIEW | Structured JSON logs, no secrets. Security-sensitive operations additionally recorded in `audit_events` (register, login success/failure, logout, consent change, export, deletion); the email on a failed login is hashed, never stored raw. Log shipping/retention not yet decided |
 | Monitoring | NEEDS REVIEW | Not yet implemented |
 
 ## Legal
@@ -58,7 +59,7 @@ Status values: `PASS`, `FAIL`, `NEEDS REVIEW`. This checklist existing does **no
 | Privacy Policy | NEEDS REVIEW | Draft exists, needs legal review |
 | Terms | NEEDS REVIEW | Draft exists, needs legal review |
 | Health disclaimer | NEEDS REVIEW | Draft exists, needs legal review |
-| Consent | NEEDS REVIEW | Design in `data-flow.md`, not yet implemented |
+| Consent | NEEDS REVIEW | Implemented: append-only `consent_records`, nothing pre-selected, `GET/PUT /account/consents` surfaced as switches in Settings → Privacy with plain-language descriptions. Still NEEDS REVIEW because *which* consents are legally required in which jurisdiction is a legal question, not an engineering one — see `compliance-checklist.md` |
 | Third-party processors | NEEDS REVIEW | Three selected, all optional and all off unless configured: OpenRouter (AI), MinIO (photos — self-hosted, so not a third party in practice), Open Food Facts (barcode lookup, barcode only). Each provider's own retention/logging policy still needs independent review — see `third-party-services.md` |
 | Jurisdiction review | NEEDS REVIEW | See `compliance-checklist.md` |
 

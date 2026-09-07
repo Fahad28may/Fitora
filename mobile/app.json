@@ -35,7 +35,8 @@
           "cameraPermission": "Fitora uses the camera only to read barcodes on food packaging. Images are processed on your device and never uploaded.",
           "recordAudioAndroid": false
         }
-      ]
+      ],
+      "expo-sharing"
     ]
   }
 }

@@ -175,7 +175,20 @@ export default function HomeScreen(): React.JSX.Element {
 
       <Text style={screenStyles.body}>Signed in as {user?.email}</Text>
 
-      <Pressable style={screenStyles.secondaryButton} onPress={() => void logout()}>
+      <Pressable
+        style={screenStyles.secondaryButton}
+        onPress={() => router.push("/settings")}
+        accessibilityRole="button"
+        accessibilityLabel="Settings and privacy"
+      >
+        <Text style={screenStyles.secondaryButtonText}>Settings & privacy</Text>
+      </Pressable>
+
+      <Pressable
+        style={screenStyles.secondaryButton}
+        onPress={() => void logout()}
+        accessibilityRole="button"
+      >
         <Text style={screenStyles.secondaryButtonText}>Log out</Text>
       </Pressable>
     </ScrollView>
