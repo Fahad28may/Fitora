@@ -28,6 +28,7 @@ Priorities, not a schedule. Do not implement a later phase's features before the
 - Consent ✅ §30 — append-only `consent_records`, nothing pre-selected, switches with plain-language copy
 - Audit logging ✅ §61 — `audit_events` for register/login/logout/consent/export/deletion; `GET /account/security-events` lets a user read their own
 - Security headers + request size limit ✅ §59
+- Custom meals ✅ §5 — `meals`/`meal_items`, `POST /meals/{id}/log` expands a template into ordinary diary entries; mobile builds a meal from what's already logged for a category
 - Dashboard completeness ✅ §4 — now includes today's activity (steps/duration/burn) and today's workout sessions with volume
 - Workout progress ✅ §14 — `GET /workouts/progress` (personal records, weekly volume, training frequency) and `/workouts/progress/exercises/{id}` (strength progression), surfaced on the Workout tab
 - Backups & disaster recovery ⬜ §60 — not designed

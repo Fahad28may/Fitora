@@ -12,6 +12,7 @@ import { aiApi, type ParsedFoodItemOut } from "../../src/api/ai";
 import { ApiError } from "../../src/api/client";
 import { foodDiaryApi } from "../../src/api/foodDiary";
 import { foodsApi } from "../../src/api/foods";
+import { mealsApi, type MealOut } from "../../src/api/meals";
 import type {
   FoodDiaryEntryOut,
   FoodOut,
@@ -46,6 +47,11 @@ export default function NutritionScreen(): React.JSX.Element {
 
   const [diaryEntries, setDiaryEntries] = useState<FoodDiaryEntryOut[]>([]);
 
+  const [meals, setMeals] = useState<MealOut[]>([]);
+  const [mealError, setMealError] = useState<string | null>(null);
+  const [savingMealFor, setSavingMealFor] = useState<MealCategory | null>(null);
+  const [newMealName, setNewMealName] = useState("");
+
   const [showScanner, setShowScanner] = useState(false);
   const [isLookingUpBarcode, setIsLookingUpBarcode] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -57,8 +63,50 @@ export default function NutritionScreen(): React.JSX.Element {
   const [isParsing, setIsParsing] = useState(false);
 
   const loadDiary = useCallback(async () => {
-    setDiaryEntries(await foodDiaryApi.listForDate(todayIso()));
+    const [entries, savedMeals] = await Promise.all([
+      foodDiaryApi.listForDate(todayIso()),
+      // Saved meals are a convenience; a failure here must not blank the
+      // diary, which is the screen's actual job.
+      mealsApi.list().catch(() => [] as MealOut[]),
+    ]);
+    setDiaryEntries(entries);
+    setMeals(savedMeals);
   }, []);
+
+  async function handleLogMeal(meal: MealOut, category: MealCategory): Promise<void> {
+    setMealError(null);
+    try {
+      await mealsApi.log(meal.id, todayIso(), category);
+      await loadDiary();
+    } catch (err) {
+      setMealError(err instanceof ApiError ? err.message : "Could not log that meal.");
+    }
+  }
+
+  async function handleSaveCategoryAsMeal(category: MealCategory): Promise<void> {
+    const entries = diaryEntries.filter((e) => e.meal_category === category);
+    if (entries.length === 0) {
+      setMealError(`Nothing logged as ${category} today to save.`);
+      return;
+    }
+    setMealError(null);
+    try {
+      await mealsApi.create(
+        newMealName.trim() || `My ${category}`,
+        entries.map((e) => ({ food_id: e.food_id, quantity: e.quantity, unit: e.unit })),
+      );
+      setSavingMealFor(null);
+      setNewMealName("");
+      await loadDiary();
+    } catch (err) {
+      setMealError(err instanceof ApiError ? err.message : "Could not save that meal.");
+    }
+  }
+
+  async function handleDeleteMeal(mealId: string): Promise<void> {
+    await mealsApi.remove(mealId);
+    await loadDiary();
+  }
 
   useEffect(() => {
     // Fetch-on-mount: setState happens after the awaited API call resolves.
@@ -186,6 +234,83 @@ export default function NutritionScreen(): React.JSX.Element {
       ListHeaderComponent={
         <View style={{ gap: 12, marginBottom: 8 }}>
           <Text style={screenStyles.title}>Nutrition</Text>
+
+          {meals.length > 0 ? (
+            <View style={[s.card, { gap: 10 }]}>
+              <Text style={screenStyles.cardTitle}>My meals</Text>
+              {meals.map((meal) => (
+                <View key={meal.id} style={{ gap: 6 }}>
+                  <Text style={screenStyles.body}>
+                    {meal.name} — {meal.items.length}{" "}
+                    {meal.items.length === 1 ? "item" : "items"},{" "}
+                    {meal.total_calories_kcal} kcal
+                  </Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {MEAL_CATEGORIES.map((category) => (
+                      <TouchableOpacity
+                        key={category}
+                        style={s.optionChip}
+                        onPress={() => void handleLogMeal(meal, category)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Log ${meal.name} as ${category}`}
+                      >
+                        <Text style={s.optionChipText}>Log as {category}</Text>
+                      </TouchableOpacity>
+                    ))}
+                    <TouchableOpacity
+                      onPress={() => void handleDeleteMeal(meal.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Delete saved meal ${meal.name}`}
+                    >
+                      <Text style={[s.secondaryButtonText, { color: "#dc2626" }]}>
+                        Delete
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {/* Building a meal from what's already logged is far less work than
+              re-picking every food in a separate builder screen. */}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {MEAL_CATEGORIES.map((category) => (
+              <TouchableOpacity
+                key={category}
+                style={s.optionChip}
+                onPress={() => {
+                  setMealError(null);
+                  setSavingMealFor((c) => (c === category ? null : category));
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Save today's ${category} as a reusable meal`}
+              >
+                <Text style={s.optionChipText}>Save {category} as meal</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {savingMealFor !== null ? (
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <TextInput
+                style={[s.input, { flex: 1 }]}
+                placeholder={`Name (default: My ${savingMealFor})`}
+                value={newMealName}
+                onChangeText={setNewMealName}
+                accessibilityLabel="Name for the saved meal"
+              />
+              <TouchableOpacity
+                style={[s.button, { marginTop: 0 }]}
+                onPress={() => void handleSaveCategoryAsMeal(savingMealFor)}
+                accessibilityRole="button"
+              >
+                <Text style={s.buttonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {mealError ? <Text style={s.error}>{mealError}</Text> : null}
 
           <TouchableOpacity
             onPress={() => {

@@ -54,7 +54,7 @@ Deterministically computed by the backend calorie-calculation service (see `docs
 
 ## Nutrition
 
-**Implemented (Phase 1):** `foods`, `food_nutrition`, `food_diary_entries` below, as built. `meals`/`meal_items` (reusable meal templates) and `recipes`/`recipe_ingredients` are deferred — Phase 1 scope is search/manual food logging, not reusable templates — so `food_diary_entries` references `food_id` directly rather than through a `meal_items` indirection. Revisit this table once meal templates are built, since at that point a shared line-item table (as originally sketched) may be worth the complexity.
+**Implemented:** `foods`, `food_nutrition`, `food_diary_entries`, and `meals`/`meal_items`. `recipes`/`recipe_ingredients` remain deferred. `food_diary_entries` references `food_id` directly rather than through a `meal_items` indirection, and that stayed the right call once meal templates were built: a saved meal expands into independent diary rows at log time, so the two tables have genuinely different lifetimes and a shared line-item table would have coupled them for no benefit.
 
 ### `foods`
 | id | source (enum: system, user, external_db) | owner_user_id (nullable, set when source=user) | name (indexed) | brand (nullable) | barcode (nullable, indexed; set on `external_db` rows imported by barcode lookup) | serving_description | serving_grams (nullable for system foods; required when a user creates a custom food, so grams-based scaling is always well-defined) |
@@ -69,7 +69,13 @@ Nutrition for a logged entry is computed on read (grams logged ÷ per_grams × v
 The actual log of what a user ate on a given day. One food per row; logging "breakfast: eggs, toast, coffee" is three rows sharing `logged_at`/`meal_category`.
 | id | user_id FK, indexed with (user_id, logged_at) | food_id FK | logged_at (date) | meal_category (breakfast/lunch/dinner/snack) | quantity | unit (serving/gram) | source (search/manual/barcode/nl/photo — only search/manual wired up so far) | created_via_ai (bool) | ai_confidence (nullable) |
 
-### `meals` / `meal_items` — deferred
+### `meals`
+| id | user_id FK, indexed with (user_id, name) | name |
+A reusable set of foods eaten together — "My Breakfast" (§5). A template, not a log.
+
+### `meal_items`
+| id | meal_id FK (CASCADE) | food_id FK (RESTRICT) | order_index | quantity | unit (serving/gram) |
+`food_id` is RESTRICT for the same reason `food_diary_entries.food_id` is: a food referenced by a saved meal must not vanish out from under it. Logging a meal expands it into one `food_diary_entries` row per item rather than storing a reference, so a logged meal stays editable line by line and later edits to the template never rewrite history.
 ### `recipes` / `recipe_ingredients` — deferred
 
 ### `water_entries`

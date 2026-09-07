@@ -4,6 +4,7 @@ from app.models.audit import AuditEvent, AuditEventType, ConsentRecord, ConsentT
 from app.models.body_measurement import BodyMeasurement
 from app.models.exercise import Exercise, ExerciseDifficulty, ExerciseType
 from app.models.goal import Goal
+from app.models.meal import Meal, MealItem
 from app.models.nutrition import Food, FoodDiaryEntry, FoodNutrition
 from app.models.profile import UnitSystem, UserProfile
 from app.models.progress_photo import ProgressPhoto
@@ -29,6 +30,8 @@ __all__ = [
     "FoodDiaryEntry",
     "FoodNutrition",
     "Goal",
+    "Meal",
+    "MealItem",
     "MessageRole",
     "ProgressPhoto",
     "UnitSystem",

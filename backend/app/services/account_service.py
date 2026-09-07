@@ -13,6 +13,7 @@ from app.models.ai_message import AIMessageRecord
 from app.models.audit import AuditEventType
 from app.models.body_measurement import BodyMeasurement
 from app.models.goal import Goal
+from app.models.meal import Meal, MealItem
 from app.models.nutrition import Food, FoodDiaryEntry, FoodNutrition, FoodSource
 from app.models.profile import UserProfile
 from app.models.progress_photo import ProgressPhoto
@@ -318,6 +319,12 @@ class AccountService:
         #    is explicit rather than relying on cascade).
         await self.db.execute(delete(AIMessageRecord).where(AIMessageRecord.user_id == uid))
         await self.db.execute(delete(FoodDiaryEntry).where(FoodDiaryEntry.user_id == uid))
+
+        # Meal items reference foods with RESTRICT, so they must go before the
+        # user's custom foods below.
+        meal_ids = select(Meal.id).where(Meal.user_id == uid)
+        await self.db.execute(delete(MealItem).where(MealItem.meal_id.in_(meal_ids)))
+        await self.db.execute(delete(Meal).where(Meal.user_id == uid))
 
         owned_food_ids = select(Food.id).where(Food.owner_user_id == uid)
         await self.db.execute(
