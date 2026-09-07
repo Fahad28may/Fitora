@@ -12,6 +12,10 @@ from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.core.middleware import RequestSizeLimitMiddleware, SecurityHeadersMiddleware
 from app.core.rate_limit import limiter
+from app.services.idempotency_service import (
+    IdempotencyConflictError,
+    IdempotencyKeyReusedError,
+)
 
 configure_logging()
 logger = logging.getLogger("fitora")
@@ -55,6 +59,31 @@ async def validation_exception_handler(
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={"detail": "Invalid request", "errors": errors},
+    )
+
+
+@app.exception_handler(IdempotencyKeyReusedError)
+async def idempotency_key_reused_handler(
+    request: Request, exc: IdempotencyKeyReusedError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "detail": (
+                "That Idempotency-Key was already used for a different request. "
+                "Use a fresh key."
+            )
+        },
+    )
+
+
+@app.exception_handler(IdempotencyConflictError)
+async def idempotency_conflict_handler(
+    request: Request, exc: IdempotencyConflictError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"detail": "A request with that Idempotency-Key is already in flight."},
     )
 
 

@@ -4,11 +4,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_idempotency_key
 from app.db.session import get_db
 from app.models.user import User
 from app.repositories.water_repository import WaterRepository
 from app.schemas.water import WaterEntryCreateRequest, WaterEntryOut
+from app.services.idempotency_service import run_idempotent
 
 router = APIRouter(prefix="/water-entries", tags=["water"])
 
@@ -18,12 +19,24 @@ async def create_water_entry(
     payload: WaterEntryCreateRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Depends(get_idempotency_key),
 ) -> WaterEntryOut:
-    entry = await WaterRepository(db).create(
-        current_user.id, payload.logged_at, payload.amount_ml
+    async def _create() -> WaterEntryOut:
+        entry = await WaterRepository(db).create(
+            current_user.id, payload.logged_at, payload.amount_ml
+        )
+        await db.commit()
+        return WaterEntryOut.model_validate(entry)
+
+    return await run_idempotent(
+        db,
+        user_id=current_user.id,
+        key=idempotency_key,
+        endpoint="POST /water-entries",
+        status_code=status.HTTP_201_CREATED,
+        model=WaterEntryOut,
+        produce=_create,
     )
-    await db.commit()
-    return WaterEntryOut.model_validate(entry)
 
 
 @router.get("", response_model=list[WaterEntryOut])

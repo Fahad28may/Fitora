@@ -4,12 +4,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_idempotency_key
 from app.db.session import get_db
 from app.models.activity_entry import ActivitySource
 from app.models.user import User
 from app.repositories.activity_repository import ActivityRepository
 from app.schemas.activity import ActivityEntryCreateRequest, ActivityEntryOut
+from app.services.idempotency_service import run_idempotent
 
 router = APIRouter(prefix="/activity-entries", tags=["activity"])
 
@@ -19,22 +20,34 @@ async def create_activity_entry(
     payload: ActivityEntryCreateRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Depends(get_idempotency_key),
 ) -> ActivityEntryOut:
-    # Manual logging only for now; device-sourced entries (Apple Health /
-    # Health Connect / wearables) arrive via Phase 4 integrations, not here.
-    entry = await ActivityRepository(db).create(
+    async def _create() -> ActivityEntryOut:
+        # Manual logging only for now; device-sourced entries (Apple Health /
+        # Health Connect / wearables) arrive via Phase 4 integrations, not here.
+        entry = await ActivityRepository(db).create(
+            user_id=current_user.id,
+            logged_at=payload.logged_at,
+            activity_type=payload.activity_type,
+            duration_min=payload.duration_min,
+            distance_km=payload.distance_km,
+            steps=payload.steps,
+            calories_burned=payload.calories_burned,
+            source=ActivitySource.MANUAL,
+            notes=payload.notes,
+        )
+        await db.commit()
+        return ActivityEntryOut.model_validate(entry)
+
+    return await run_idempotent(
+        db,
         user_id=current_user.id,
-        logged_at=payload.logged_at,
-        activity_type=payload.activity_type,
-        duration_min=payload.duration_min,
-        distance_km=payload.distance_km,
-        steps=payload.steps,
-        calories_burned=payload.calories_burned,
-        source=ActivitySource.MANUAL,
-        notes=payload.notes,
+        key=idempotency_key,
+        endpoint="POST /activity-entries",
+        status_code=status.HTTP_201_CREATED,
+        model=ActivityEntryOut,
+        produce=_create,
     )
-    await db.commit()
-    return ActivityEntryOut.model_validate(entry)
 
 
 @router.get("", response_model=list[ActivityEntryOut])

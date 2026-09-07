@@ -125,6 +125,12 @@ Manual logging only in Phase 2 (API always writes `source=manual`); the device s
 | id | conversation_id FK | role (user/assistant/tool) | content (text, redacted of PII where possible before storage) | created_at |
 Retention and deletion covered in `privacy-policy.md`; deleting an account deletes these.
 
+## Offline support
+
+### `idempotency_keys`
+| id | user_id FK (CASCADE) | idempotency_key | endpoint | status_code | response_body (json) | created_at |
+Unique on `(user_id, idempotency_key)` — per user, not global, because keys are generated on the client and two users could pick the same one. Lets a queued offline write be replayed safely: a request that succeeded but whose response was lost returns the original outcome instead of logging the same meal twice. `endpoint` is recorded so a key replayed against a different route is a 409 rather than an unrelated stored response. No pruning job yet; rows are deleted with the account.
+
 ## Conventions
 
 - Money/quantities: `numeric`, never `float`, for anything used in calculation totals.

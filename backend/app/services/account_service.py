@@ -13,6 +13,7 @@ from app.models.ai_message import AIMessageRecord
 from app.models.audit import AuditEventType
 from app.models.body_measurement import BodyMeasurement
 from app.models.goal import Goal
+from app.models.idempotency import IdempotencyRecord
 from app.models.meal import Meal, MealItem
 from app.models.nutrition import Food, FoodDiaryEntry, FoodNutrition, FoodSource
 from app.models.profile import UserProfile
@@ -351,6 +352,7 @@ class AccountService:
             ActivityEntry,
             ProgressPhoto,
             Goal,
+            IdempotencyRecord,
             UserProfile,
             UserSession,
         )

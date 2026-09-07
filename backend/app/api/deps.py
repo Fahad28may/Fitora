@@ -1,7 +1,7 @@
 from collections.abc import AsyncGenerator
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,7 @@ from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.services.ai.client import AIClient, OpenRouterClient
 from app.services.food_db.client import FoodDbClient, OpenFoodFactsClient
+from app.services.idempotency_service import MAX_KEY_LENGTH
 from app.services.storage.base import ObjectStorage
 
 _bearer_scheme = HTTPBearer(auto_error=True)
@@ -89,3 +90,24 @@ def get_object_storage() -> ObjectStorage | None:
         secret_key=settings.s3_secret_access_key,
         presigned_expiry_seconds=settings.s3_presigned_url_expiry_seconds,
     )
+
+
+def get_idempotency_key(
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> str | None:
+    """Optional client-supplied replay key for write endpoints (§46).
+
+    Only a client that queued a write while offline can generate a stable key
+    for it, so this is opt-in: absent header, absent replay protection.
+    """
+    if idempotency_key is None:
+        return None
+    key = idempotency_key.strip()
+    if not key:
+        return None
+    if len(key) > MAX_KEY_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Idempotency-Key must be at most {MAX_KEY_LENGTH} characters.",
+        )
+    return key

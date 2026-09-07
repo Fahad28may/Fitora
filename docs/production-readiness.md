@@ -54,6 +54,13 @@ Status values: `PASS`, `FAIL`, `NEEDS REVIEW`. This checklist existing does **no
 | Logging | NEEDS REVIEW | Structured JSON logs, no secrets. Security-sensitive operations additionally recorded in `audit_events` (register, login success/failure, logout, consent change, export, deletion); the email on a failed login is hashed, never stored raw. Log shipping/retention not yet decided |
 | Monitoring | NEEDS REVIEW | Not yet implemented |
 
+## Resilience
+| Item | Status | Notes |
+|---|---|---|
+| Duplicate-safe retries | PASS | Optional `Idempotency-Key` on `POST /food-diary`, `/water-entries`, `/weight-entries`, `/activity-entries`; keys scoped per user, reuse across endpoints is a 409. Covered by `tests/test_idempotency.py` |
+| Offline logging | NEEDS REVIEW | Client outbox persists queued writes and replays them with their original key (`src/api/outbox.ts`, 13 tests). Only water quick-add currently routes through it |
+| Idempotency key retention | NEEDS REVIEW | Keys are stored indefinitely and deleted with the account. A pruning job for keys older than the retry window is not yet written |
+
 ## Accessibility
 | Item | Status | Notes |
 |---|---|---|

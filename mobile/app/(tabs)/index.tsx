@@ -3,10 +3,10 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { dashboardApi } from "../../src/api/dashboard";
+import { outbox } from "../../src/api/outbox";
 import type { Recommendation, RecommendationPriority } from "../../src/api/recommendations";
 import { recommendationsApi } from "../../src/api/recommendations";
 import type { DashboardOut } from "../../src/api/types";
-import { waterApi } from "../../src/api/water";
 import { useAuth } from "../../src/auth/AuthContext";
 import { todayIso } from "../../src/utils/date";
 import { screenStyles } from "./styles";
@@ -35,9 +35,15 @@ export default function HomeScreen(): React.JSX.Element {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const load = useCallback(async () => {
     try {
+      // Anything queued while offline goes out before the dashboard is read,
+      // so the numbers below already include it rather than appearing to
+      // have lost the user's logs.
+      await outbox.flush();
+      setPendingCount(await outbox.count());
       // Recommendations are advisory — a failure there must not blank the
       // dashboard, so they're fetched independently and tolerate errors.
       const [data, recs] = await Promise.all([
@@ -57,7 +63,14 @@ export default function HomeScreen(): React.JSX.Element {
   }, [load]);
 
   async function handleAddWater(amountMl: number): Promise<void> {
-    await waterApi.create(todayIso(), amountMl);
+    // Goes through the outbox: if the network is down the write is queued
+    // with a stable idempotency key and replayed later, so a flaky
+    // connection can't turn one tap into two logged drinks.
+    await outbox.send(
+      "/api/v1/water-entries",
+      { logged_at: todayIso(), amount_ml: amountMl },
+      `${amountMl} ml of water`,
+    );
     await load();
   }
 
@@ -85,6 +98,18 @@ export default function HomeScreen(): React.JSX.Element {
       }
     >
       <Text style={screenStyles.title}>How am I doing today?</Text>
+
+      {pendingCount > 0 ? (
+        <View style={screenStyles.card} accessible accessibilityRole="alert">
+          <Text style={screenStyles.cardTitle}>
+            {pendingCount} {pendingCount === 1 ? "entry" : "entries"} waiting to sync
+          </Text>
+          <Text style={screenStyles.body}>
+            Saved on this device. They&apos;ll be sent automatically next time you have a
+            connection — pull down to try now.
+          </Text>
+        </View>
+      ) : null}
 
       {needsSetup ? (
         <Pressable

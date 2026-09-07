@@ -36,7 +36,7 @@ Priorities, not a schedule. Do not implement a later phase's features before the
 - Email verification / password reset ⬜ §21 — needs an email provider (credential decision)
 - Frontend tests ✅ §48 — jest-expo + React Native Testing Library, 35 tests across API-client behaviour, component (BarcodeScanner), screen (Settings), and form validation (register). Wired into CI as a required step
 - Accessibility ✅ §44 — every interactive element across the app has an accessible name, selection state is exposed via `accessibilityState` rather than colour alone, and recommendation priority now carries a text label as well as a coloured rule. A static test fails the build if a new control ships without a name. Contrast and reduced-motion review still outstanding
-- Offline resilience ⬜ §46 — not started
+- Offline resilience ✅ §46 — server-side replay protection via an optional `Idempotency-Key` header on the logging endpoints (food diary, water, weight, activity), plus a client outbox that queues writes when the network is down, replays them with the key they were queued with, and shows a pending-sync count on Home. Currently wired to water quick-add; the other logging screens are a follow-up
 
 ## Phase 4 — in progress
 - Barcode scanning ✅ backend done — `GET /foods/barcode/{barcode}` against Open Food Facts (free, no API key). Crowd-sourced nutrition is validated against plausibility bounds before import, results are cached in the local `foods` table, and the provider is opt-in (`FOOD_DB_PROVIDER`) so no barcode leaves the server by default. Mobile scanner UI ✅ (expo-camera, EAN/UPC only, permission-gated, with a crowd-sourced-data caveat shown before logging)

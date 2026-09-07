@@ -4,11 +4,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_idempotency_key
 from app.db.session import get_db
 from app.models.user import User
 from app.repositories.weight_repository import WeightRepository
 from app.schemas.weight import WeightEntryCreateRequest, WeightEntryOut
+from app.services.idempotency_service import run_idempotent
 
 router = APIRouter(prefix="/weight-entries", tags=["weight"])
 
@@ -21,11 +22,23 @@ async def create_weight_entry(
     payload: WeightEntryCreateRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Depends(get_idempotency_key),
 ) -> WeightEntryOut:
-    repo = WeightRepository(db)
-    entry = await repo.create(current_user.id, payload.logged_at, payload.weight_kg)
-    await db.commit()
-    return WeightEntryOut.model_validate(entry)
+    async def _create() -> WeightEntryOut:
+        repo = WeightRepository(db)
+        entry = await repo.create(current_user.id, payload.logged_at, payload.weight_kg)
+        await db.commit()
+        return WeightEntryOut.model_validate(entry)
+
+    return await run_idempotent(
+        db,
+        user_id=current_user.id,
+        key=idempotency_key,
+        endpoint="POST /weight-entries",
+        status_code=status.HTTP_201_CREATED,
+        model=WeightEntryOut,
+        produce=_create,
+    )
 
 
 @router.get("", response_model=list[WeightEntryOut])

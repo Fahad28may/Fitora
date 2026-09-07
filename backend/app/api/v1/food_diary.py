@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_idempotency_key
 from app.db.session import get_db
 from app.models.user import User
 from app.repositories.nutrition_repository import FoodDiaryRepository
@@ -15,6 +15,7 @@ from app.services.food_diary_service import (
     FoodNotFoundError,
     MissingServingSizeError,
 )
+from app.services.idempotency_service import run_idempotent
 
 router = APIRouter(prefix="/food-diary", tags=["nutrition"])
 
@@ -24,9 +25,11 @@ async def create_diary_entry(
     payload: FoodDiaryEntryCreateRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    idempotency_key: str | None = Depends(get_idempotency_key),
 ) -> FoodDiaryEntryOut:
     service = FoodDiaryService(db)
-    try:
+
+    async def _create() -> FoodDiaryEntryOut:
         return await service.create_entry(
             user_id=current_user.id,
             food_id=payload.food_id,
@@ -35,6 +38,17 @@ async def create_diary_entry(
             quantity=payload.quantity,
             unit=payload.unit.value,
             source=payload.source.value,
+        )
+
+    try:
+        return await run_idempotent(
+            db,
+            user_id=current_user.id,
+            key=idempotency_key,
+            endpoint="POST /food-diary",
+            status_code=status.HTTP_201_CREATED,
+            model=FoodDiaryEntryOut,
+            produce=_create,
         )
     except FoodNotFoundError as exc:
         raise HTTPException(
