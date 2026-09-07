@@ -28,6 +28,8 @@ Priorities, not a schedule. Do not implement a later phase's features before the
 - Consent ✅ §30 — append-only `consent_records`, nothing pre-selected, switches with plain-language copy
 - Audit logging ✅ §61 — `audit_events` for register/login/logout/consent/export/deletion; `GET /account/security-events` lets a user read their own
 - Security headers + request size limit ✅ §59
+- Dashboard completeness ✅ §4 — now includes today's activity (steps/duration/burn) and today's workout sessions with volume
+- Workout progress ✅ §14 — `GET /workouts/progress` (personal records, weekly volume, training frequency) and `/workouts/progress/exercises/{id}` (strength progression), surfaced on the Workout tab
 - Backups & disaster recovery ⬜ §60 — not designed
 - Email verification / password reset ⬜ §21 — needs an email provider (credential decision)
 - Frontend tests ✅ §48 — jest-expo + React Native Testing Library, 35 tests across API-client behaviour, component (BarcodeScanner), screen (Settings), and form validation (register). Wired into CI as a required step

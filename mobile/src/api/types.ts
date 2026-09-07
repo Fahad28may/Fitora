@@ -164,6 +164,8 @@ export interface DashboardOut {
   carbs: MacroProgress;
   fat: MacroProgress;
   water: WaterProgress;
+  activity: ActivityProgress;
+  todays_workouts: WorkoutSummary[];
   latest_weight_kg: number | null;
   latest_weight_logged_at: string | null;
 }
@@ -185,4 +187,21 @@ export interface SecurityEvent {
   event_type: string;
   metadata: Record<string, unknown>;
   created_at: string;
+}
+
+export interface ActivityProgress {
+  entry_count: number;
+  duration_min: number;
+  /** null (not 0) when nothing reported steps — no data is not "no steps". */
+  steps: number | null;
+  calories_burned: number | null;
+}
+
+export interface WorkoutSummary {
+  session_id: string;
+  workout_name: string | null;
+  started_at: string;
+  ended_at: string | null;
+  set_count: number;
+  total_volume_kg: number;
 }

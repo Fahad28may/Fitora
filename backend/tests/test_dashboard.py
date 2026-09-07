@@ -155,3 +155,107 @@ async def test_dashboard_shows_latest_weight_as_of_requested_date(client: AsyncC
 async def test_dashboard_requires_authentication(client: AsyncClient) -> None:
     resp = await client.get("/api/v1/dashboard")
     assert resp.status_code in (401, 403)
+
+
+async def test_dashboard_reports_no_step_data_as_null_not_zero(client: AsyncClient) -> None:
+    """§16: no fake precision. A hard 0 would assert the user took no steps,
+    which is a different claim from "nothing reported any"."""
+    headers = await _auth_headers(client, "dash-nosteps@example.com")
+
+    resp = await client.get("/api/v1/dashboard", headers=headers)
+
+    activity = resp.json()["activity"]
+    assert activity["steps"] is None
+    assert activity["calories_burned"] is None
+    assert activity["entry_count"] == 0
+    assert activity["duration_min"] == 0
+
+
+async def test_dashboard_sums_todays_activity(client: AsyncClient) -> None:
+    headers = await _auth_headers(client, "dash-activity@example.com")
+    today = date.today().isoformat()
+    for payload in (
+        {"logged_at": today, "activity_type": "walking", "duration_min": 30, "steps": 4000},
+        {"logged_at": today, "activity_type": "cycling", "duration_min": 45, "steps": 500},
+    ):
+        resp = await client.post("/api/v1/activity-entries", headers=headers, json=payload)
+        assert resp.status_code == 201, resp.text
+    # Yesterday's activity must not leak into today's total.
+    await client.post(
+        "/api/v1/activity-entries",
+        headers=headers,
+        json={
+            "logged_at": (date.today() - timedelta(days=1)).isoformat(),
+            "activity_type": "running",
+            "duration_min": 60,
+            "steps": 9000,
+        },
+    )
+
+    activity = (await client.get("/api/v1/dashboard", headers=headers)).json()["activity"]
+
+    assert activity["entry_count"] == 2
+    assert activity["duration_min"] == 75
+    assert activity["steps"] == 4500
+
+
+async def test_dashboard_shows_todays_workout_with_volume(client: AsyncClient) -> None:
+    headers = await _auth_headers(client, "dash-workout@example.com")
+    exercises = await client.get("/api/v1/exercises", headers=headers, params={"limit": 1})
+    exercise_id = exercises.json()[0]["id"]
+
+    resp = await client.post(
+        "/api/v1/workout-sessions",
+        headers=headers,
+        json={
+            "started_at": f"{date.today().isoformat()}T09:00:00Z",
+            "ended_at": f"{date.today().isoformat()}T10:00:00Z",
+            "sets": [
+                {"exercise_id": exercise_id, "set_number": 1, "reps": 10, "weight_kg": 60},
+                {"exercise_id": exercise_id, "set_number": 2, "reps": 8, "weight_kg": 65},
+            ],
+        },
+    )
+    assert resp.status_code == 201, resp.text
+
+    workouts = (await client.get("/api/v1/dashboard", headers=headers)).json()["todays_workouts"]
+
+    assert len(workouts) == 1
+    assert workouts[0]["set_count"] == 2
+    # 10x60 + 8x65 = 1120
+    assert workouts[0]["total_volume_kg"] == 1120.0
+
+
+async def test_dashboard_workouts_are_scoped_to_the_day_and_the_user(
+    client: AsyncClient,
+) -> None:
+    headers_a = await _auth_headers(client, "dash-wscope-a@example.com")
+    headers_b = await _auth_headers(client, "dash-wscope-b@example.com")
+    exercises = await client.get("/api/v1/exercises", headers=headers_a, params={"limit": 1})
+    exercise_id = exercises.json()[0]["id"]
+
+    await client.post(
+        "/api/v1/workout-sessions",
+        headers=headers_a,
+        json={
+            "started_at": f"{date.today().isoformat()}T09:00:00Z",
+            "ended_at": f"{date.today().isoformat()}T10:00:00Z",
+            "sets": [{"exercise_id": exercise_id, "set_number": 1, "reps": 5, "weight_kg": 50}],
+        },
+    )
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    await client.post(
+        "/api/v1/workout-sessions",
+        headers=headers_a,
+        json={
+            "started_at": f"{yesterday}T09:00:00Z",
+            "ended_at": f"{yesterday}T10:00:00Z",
+            "sets": [{"exercise_id": exercise_id, "set_number": 1, "reps": 5, "weight_kg": 50}],
+        },
+    )
+
+    body_a = (await client.get("/api/v1/dashboard", headers=headers_a)).json()
+    body_b = (await client.get("/api/v1/dashboard", headers=headers_b)).json()
+
+    assert len(body_a["todays_workouts"]) == 1
+    assert body_b["todays_workouts"] == []

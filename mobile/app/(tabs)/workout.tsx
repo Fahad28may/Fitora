@@ -10,8 +10,13 @@ import {
 
 import { ApiError } from "../../src/api/client";
 import { exercisesApi, type ExerciseOut } from "../../src/api/exercises";
+import {
+  workoutProgressApi,
+  type WorkoutProgressOut,
+} from "../../src/api/workoutProgress";
 import { workoutSessionsApi, type WorkoutSessionOut } from "../../src/api/workouts";
 import { formStyles as s } from "../../src/ui/formStyles";
+import { TrendChart, type TrendPoint } from "../../src/ui/TrendChart";
 import { screenStyles } from "./styles";
 
 interface DraftSet {
@@ -33,9 +38,17 @@ export default function WorkoutScreen(): React.JSX.Element {
   const [isLogging, setIsLogging] = useState(false);
 
   const [sessions, setSessions] = useState<WorkoutSessionOut[]>([]);
+  const [progress, setProgress] = useState<WorkoutProgressOut | null>(null);
 
   const loadSessions = useCallback(async () => {
-    setSessions(await workoutSessionsApi.list());
+    const [sessionData, progressData] = await Promise.all([
+      workoutSessionsApi.list(),
+      // Progress is derived and non-essential; a failure here must not blank
+      // the session list, which is the screen's actual job.
+      workoutProgressApi.get().catch(() => null),
+    ]);
+    setSessions(sessionData);
+    setProgress(progressData);
   }, []);
 
   useEffect(() => {
@@ -121,6 +134,47 @@ export default function WorkoutScreen(): React.JSX.Element {
       ListHeaderComponent={
         <View style={{ gap: 12, marginBottom: 8 }}>
           <Text style={screenStyles.title}>Workout</Text>
+
+          {progress !== null && progress.total_sessions > 0 ? (
+            <>
+              <View style={s.card}>
+                <Text style={screenStyles.cardTitle}>Last {progress.weeks} weeks</Text>
+                <Text style={screenStyles.body}>
+                  {progress.total_sessions} sessions · {progress.sessions_per_week}/week ·{" "}
+                  {progress.total_volume_kg.toLocaleString()} kg lifted
+                </Text>
+                <Text style={s.helpText}>
+                  Trained in {progress.active_weeks} of {progress.weekly.length} weeks.
+                </Text>
+              </View>
+
+              <TrendChart
+                title="Weekly volume"
+                unit=" kg"
+                points={progress.weekly.map(
+                  (w): TrendPoint => ({
+                    label: w.week_start.slice(5),
+                    value: w.total_volume_kg,
+                  }),
+                )}
+              />
+
+              {progress.personal_records.length > 0 ? (
+                <View style={s.card}>
+                  <Text style={screenStyles.cardTitle}>Personal records</Text>
+                  <Text style={s.helpText}>
+                    Heaviest set you have actually lifted — not an estimated one-rep max.
+                  </Text>
+                  {progress.personal_records.slice(0, 5).map((record) => (
+                    <Text key={record.exercise_id} style={screenStyles.body}>
+                      {record.exercise_name}: {record.best_weight_kg} kg ×{" "}
+                      {record.reps_at_best} ({record.achieved_at})
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
+            </>
+          ) : null}
 
           <View style={{ flexDirection: "row", gap: 10 }}>
             <TextInput

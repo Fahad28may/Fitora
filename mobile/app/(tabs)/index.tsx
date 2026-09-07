@@ -134,6 +134,52 @@ export default function HomeScreen(): React.JSX.Element {
           </View>
 
           <View style={screenStyles.card}>
+            <Text style={screenStyles.cardTitle}>Activity</Text>
+            {dashboard.activity.entry_count === 0 ? (
+              <Text style={screenStyles.body}>Nothing logged today.</Text>
+            ) : (
+              <>
+                <Text style={screenStyles.body}>
+                  {dashboard.activity.entry_count}{" "}
+                  {dashboard.activity.entry_count === 1 ? "activity" : "activities"} ·{" "}
+                  {dashboard.activity.duration_min} min
+                </Text>
+                {/* Steps are shown only when something reported them. A "0
+                    steps" line would assert the user didn't move, which isn't
+                    a claim the app can make without a device integration. */}
+                {dashboard.activity.steps !== null ? (
+                  <Text style={screenStyles.body}>
+                    {dashboard.activity.steps.toLocaleString()} steps
+                  </Text>
+                ) : null}
+                {dashboard.activity.calories_burned !== null ? (
+                  <Text style={screenStyles.body}>
+                    ~{dashboard.activity.calories_burned} kcal burned (your estimate)
+                  </Text>
+                ) : null}
+              </>
+            )}
+          </View>
+
+          <View style={screenStyles.card}>
+            <Text style={screenStyles.cardTitle}>Today&apos;s workout</Text>
+            {dashboard.todays_workouts.length === 0 ? (
+              <Text style={screenStyles.body}>
+                No session logged today — start one from the Workout tab.
+              </Text>
+            ) : (
+              dashboard.todays_workouts.map((session) => (
+                <Text key={session.session_id} style={screenStyles.body}>
+                  {session.workout_name ?? "Freeform session"} · {session.set_count} sets
+                  {session.total_volume_kg > 0
+                    ? ` · ${session.total_volume_kg.toLocaleString()} kg lifted`
+                    : ""}
+                </Text>
+              ))
+            )}
+          </View>
+
+          <View style={screenStyles.card}>
             <Text style={screenStyles.cardTitle}>Weight</Text>
             <Text style={screenStyles.body}>
               {dashboard.latest_weight_kg !== null

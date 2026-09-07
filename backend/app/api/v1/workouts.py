@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -8,6 +8,12 @@ from app.db.session import get_db
 from app.models.user import User
 from app.repositories.workout_repository import WorkoutRepository
 from app.schemas.workout import WorkoutCreateRequest, WorkoutOut
+from app.schemas.workout_progress import ExerciseProgressionOut, WorkoutProgressOut
+from app.services.workout_progress_service import (
+    DEFAULT_WEEKS,
+    MAX_WEEKS,
+    WorkoutProgressService,
+)
 from app.services.workout_service import UnknownExerciseError, WorkoutService
 
 router = APIRouter(prefix="/workouts", tags=["workouts"])
@@ -33,6 +39,31 @@ async def list_workouts(
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> list[WorkoutOut]:
     return await WorkoutService(db).list_workouts(current_user.id)
+
+
+# Declared before "/{workout_id}": FastAPI matches routes in declaration
+# order, so a static path registered after the catch-all is unreachable.
+@router.get("/progress", response_model=WorkoutProgressOut)
+async def get_workout_progress(
+    weeks: int = Query(default=DEFAULT_WEEKS, ge=1, le=MAX_WEEKS),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> WorkoutProgressOut:
+    """Personal records, training volume, and consistency over recent weeks."""
+    return await WorkoutProgressService(db).get_progress(current_user.id, weeks)
+
+
+@router.get("/progress/exercises/{exercise_id}", response_model=ExerciseProgressionOut)
+async def get_exercise_progression(
+    exercise_id: UUID,
+    weeks: int = Query(default=DEFAULT_WEEKS, ge=1, le=MAX_WEEKS),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ExerciseProgressionOut:
+    """Heaviest set per week for one exercise — strength progression."""
+    return await WorkoutProgressService(db).get_exercise_progression(
+        current_user.id, exercise_id, weeks
+    )
 
 
 @router.get("/{workout_id}", response_model=WorkoutOut)
