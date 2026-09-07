@@ -278,7 +278,11 @@ export default function SettingsScreen(): React.JSX.Element {
                 <Text style={s.buttonText}>Delete my account permanently</Text>
               )}
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowDeleteForm(false)}>
+            <TouchableOpacity
+              onPress={() => setShowDeleteForm(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel account deletion"
+            >
               <Text style={s.secondaryButtonText}>Cancel</Text>
             </TouchableOpacity>
           </>

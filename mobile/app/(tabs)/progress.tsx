@@ -89,6 +89,7 @@ export default function ProgressScreen(): React.JSX.Element {
             <TextInput
               style={[s.input, { flex: 1 }]}
               placeholder="Weight today (kg)"
+          accessibilityLabel="Weight today (kg)"
               keyboardType="numeric"
               value={weightKg}
               onChangeText={setWeightKg}
@@ -97,6 +98,8 @@ export default function ProgressScreen(): React.JSX.Element {
               style={[s.button, { marginTop: 0 }, (!weightKg || isSubmitting) && s.buttonDisabled]}
               onPress={() => void handleLog()}
               disabled={!weightKg || isSubmitting}
+              accessibilityRole="button"
+              accessibilityLabel="Log today's weight"
             >
               {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>Log</Text>}
             </TouchableOpacity>
@@ -158,7 +161,11 @@ export default function ProgressScreen(): React.JSX.Element {
             <Text style={screenStyles.body}>{item.logged_at}</Text>
             <Text style={screenStyles.cardTitle}>{item.weight_kg} kg</Text>
           </View>
-          <TouchableOpacity onPress={() => void handleDelete(item.id)}>
+          <TouchableOpacity
+            onPress={() => void handleDelete(item.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete weight entry from ${item.logged_at}`}
+          >
             <Text style={[s.error, { fontSize: 13 }]}>Delete</Text>
           </TouchableOpacity>
         </View>
@@ -229,6 +236,7 @@ function MeasurementsSection({
         <TextInput
           style={[s.input, { flex: 1, minWidth: 100 }]}
           placeholder="Waist (cm)"
+          accessibilityLabel="Waist (cm)"
           keyboardType="numeric"
           value={waist}
           onChangeText={setWaist}
@@ -236,6 +244,7 @@ function MeasurementsSection({
         <TextInput
           style={[s.input, { flex: 1, minWidth: 100 }]}
           placeholder="Chest (cm)"
+          accessibilityLabel="Chest (cm)"
           keyboardType="numeric"
           value={chest}
           onChangeText={setChest}
@@ -243,6 +252,7 @@ function MeasurementsSection({
         <TextInput
           style={[s.input, { flex: 1, minWidth: 100 }]}
           placeholder="Arm (cm)"
+          accessibilityLabel="Arm (cm)"
           keyboardType="numeric"
           value={arm}
           onChangeText={setArm}
@@ -250,6 +260,7 @@ function MeasurementsSection({
         <TextInput
           style={[s.input, { flex: 1, minWidth: 100 }]}
           placeholder="Leg (cm)"
+          accessibilityLabel="Leg (cm)"
           keyboardType="numeric"
           value={leg}
           onChangeText={setLeg}
@@ -257,6 +268,7 @@ function MeasurementsSection({
         <TextInput
           style={[s.input, { flex: 1, minWidth: 100 }]}
           placeholder="Hip (cm)"
+          accessibilityLabel="Hip (cm)"
           keyboardType="numeric"
           value={hip}
           onChangeText={setHip}
@@ -269,6 +281,8 @@ function MeasurementsSection({
         style={[s.button, (!canSubmit || isSubmitting) && s.buttonDisabled]}
         onPress={() => void handleSubmit()}
         disabled={!canSubmit || isSubmitting}
+        accessibilityRole="button"
+        accessibilityLabel="Save measurements"
       >
         {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>Log measurements</Text>}
       </TouchableOpacity>
@@ -300,7 +314,11 @@ function MeasurementsSection({
                 .filter(Boolean)
                 .join(" · ")}
             </Text>
-            <TouchableOpacity onPress={() => onDelete(m.id)}>
+            <TouchableOpacity
+              onPress={() => onDelete(m.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`Delete measurements from ${m.logged_at}`}
+            >
               <Text style={[s.error, { fontSize: 13 }]}>Delete</Text>
             </TouchableOpacity>
           </View>

@@ -180,11 +180,17 @@ export default function WorkoutScreen(): React.JSX.Element {
             <TextInput
               style={[s.input, { flex: 1 }]}
               placeholder="Search exercises (e.g. squat)"
+              accessibilityLabel="Search exercises"
               value={query}
               onChangeText={setQuery}
               onSubmitEditing={() => void handleSearch()}
             />
-            <TouchableOpacity style={[s.button, { marginTop: 0 }]} onPress={() => void handleSearch()}>
+            <TouchableOpacity
+              style={[s.button, { marginTop: 0 }]}
+              onPress={() => void handleSearch()}
+              accessibilityRole="button"
+              accessibilityLabel="Search exercises"
+            >
               {isSearching ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>Go</Text>}
             </TouchableOpacity>
           </View>
@@ -195,6 +201,8 @@ export default function WorkoutScreen(): React.JSX.Element {
               key={exercise.id}
               style={s.card}
               onPress={() => addExercise(exercise)}
+              accessibilityRole="button"
+              accessibilityLabel={`Add ${exercise.name} to this session`}
             >
               <Text style={screenStyles.cardTitle}>{exercise.name}</Text>
               <Text style={screenStyles.body}>
@@ -210,7 +218,11 @@ export default function WorkoutScreen(): React.JSX.Element {
                 <View key={d.key} style={{ gap: 6 }}>
                   <View style={screenStyles.row}>
                     <Text style={screenStyles.body}>{d.exerciseName}</Text>
-                    <TouchableOpacity onPress={() => removeDraftSet(d.key)}>
+                    <TouchableOpacity
+                      onPress={() => removeDraftSet(d.key)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${d.exerciseName} set`}
+                    >
                       <Text style={[s.error, { fontSize: 13 }]}>Remove</Text>
                     </TouchableOpacity>
                   </View>
@@ -218,6 +230,7 @@ export default function WorkoutScreen(): React.JSX.Element {
                     <TextInput
                       style={[s.input, { flex: 1 }]}
                       placeholder="Reps"
+                      accessibilityLabel={`Reps for ${d.exerciseName}`}
                       keyboardType="numeric"
                       value={d.reps}
                       onChangeText={(v) => updateDraftSet(d.key, "reps", v)}
@@ -225,6 +238,7 @@ export default function WorkoutScreen(): React.JSX.Element {
                     <TextInput
                       style={[s.input, { flex: 1 }]}
                       placeholder="Weight (kg)"
+                      accessibilityLabel={`Weight in kilograms for ${d.exerciseName}`}
                       keyboardType="numeric"
                       value={d.weightKg}
                       onChangeText={(v) => updateDraftSet(d.key, "weightKg", v)}
@@ -239,6 +253,8 @@ export default function WorkoutScreen(): React.JSX.Element {
                 style={[s.button, isLogging && s.buttonDisabled]}
                 onPress={() => void handleLogSession()}
                 disabled={isLogging}
+                accessibilityRole="button"
+                accessibilityLabel="Save this workout session"
               >
                 {isLogging ? (
                   <ActivityIndicator color="#fff" />
@@ -262,7 +278,11 @@ export default function WorkoutScreen(): React.JSX.Element {
             {[...new Set(item.sets.map((s2) => s2.exercise_name))].join(", ")}
           </Text>
           <Text style={screenStyles.body}>{item.sets.length} sets logged</Text>
-          <TouchableOpacity onPress={() => void handleDeleteSession(item.id)}>
+          <TouchableOpacity
+            onPress={() => void handleDeleteSession(item.id)}
+            accessibilityRole="button"
+            accessibilityLabel="Delete this workout session"
+          >
             <Text style={[s.error, { fontSize: 13 }]}>Delete</Text>
           </TouchableOpacity>
         </View>

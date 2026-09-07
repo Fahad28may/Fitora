@@ -40,6 +40,7 @@ export default function LoginScreen(): React.JSX.Element {
       <TextInput
         style={styles.input}
         placeholder="Email"
+        accessibilityLabel="Email address"
         autoCapitalize="none"
         keyboardType="email-address"
         textContentType="emailAddress"
@@ -49,6 +50,7 @@ export default function LoginScreen(): React.JSX.Element {
       <TextInput
         style={styles.input}
         placeholder="Password"
+        accessibilityLabel="Password"
         secureTextEntry
         textContentType="password"
         value={password}
@@ -61,6 +63,8 @@ export default function LoginScreen(): React.JSX.Element {
         style={styles.button}
         onPress={handleSubmit}
         disabled={isSubmitting || !email || !password}
+        accessibilityRole="button"
+        accessibilityLabel="Log in"
       >
         {isSubmitting ? (
           <ActivityIndicator color="#fff" />

@@ -35,7 +35,7 @@ Priorities, not a schedule. Do not implement a later phase's features before the
 - Backups & disaster recovery ⬜ §60 — not designed
 - Email verification / password reset ⬜ §21 — needs an email provider (credential decision)
 - Frontend tests ✅ §48 — jest-expo + React Native Testing Library, 35 tests across API-client behaviour, component (BarcodeScanner), screen (Settings), and form validation (register). Wired into CI as a required step
-- Accessibility ⬜ §44 — partial; Settings and the barcode scanner have labels, the rest of the app does not
+- Accessibility ✅ §44 — every interactive element across the app has an accessible name, selection state is exposed via `accessibilityState` rather than colour alone, and recommendation priority now carries a text label as well as a coloured rule. A static test fails the build if a new control ships without a name. Contrast and reduced-motion review still outstanding
 - Offline resilience ⬜ §46 — not started
 
 ## Phase 4 — in progress

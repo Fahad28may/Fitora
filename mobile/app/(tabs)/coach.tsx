@@ -144,7 +144,11 @@ export default function CoachScreen(): React.JSX.Element {
         )}
         ListFooterComponent={
           messages.length > 0 ? (
-            <TouchableOpacity onPress={() => void handleClear()}>
+            <TouchableOpacity
+              onPress={() => void handleClear()}
+              accessibilityRole="button"
+              accessibilityLabel="Clear the whole coach conversation"
+            >
               <Text style={[s.error, { fontSize: 13, marginTop: 4 }]}>Clear conversation</Text>
             </TouchableOpacity>
           ) : null
@@ -159,6 +163,7 @@ export default function CoachScreen(): React.JSX.Element {
         <TextInput
           style={[s.input, { flex: 1 }]}
           placeholder="Ask the coach..."
+          accessibilityLabel="Message to the coach"
           value={input}
           onChangeText={setInput}
           onSubmitEditing={() => void handleSend()}
@@ -167,6 +172,8 @@ export default function CoachScreen(): React.JSX.Element {
           style={[s.button, { marginTop: 0 }, (!input.trim() || isSending) && s.buttonDisabled]}
           onPress={() => void handleSend()}
           disabled={!input.trim() || isSending}
+          accessibilityRole="button"
+          accessibilityLabel="Send message to the coach"
         >
           {isSending ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>Send</Text>}
         </TouchableOpacity>

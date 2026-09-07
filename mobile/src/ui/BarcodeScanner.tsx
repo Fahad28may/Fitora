@@ -43,7 +43,11 @@ export function BarcodeScanner({
         <Text style={s.helpText}>
           Open Fitora on your phone to scan, or search for the food by name here.
         </Text>
-        <TouchableOpacity onPress={onCancel}>
+        <TouchableOpacity
+          onPress={onCancel}
+          accessibilityRole="button"
+          accessibilityLabel="Back to food search"
+        >
           <Text style={s.secondaryButtonText}>Back to search</Text>
         </TouchableOpacity>
       </View>
@@ -68,6 +72,8 @@ export function BarcodeScanner({
         {permission.canAskAgain ? (
           <TouchableOpacity
             style={[s.button, { marginTop: 0 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Allow camera access"
             onPress={() => {
               setIsRequesting(true);
               void requestPermission().finally(() => setIsRequesting(false));
@@ -85,7 +91,11 @@ export function BarcodeScanner({
             search for the food by name instead.
           </Text>
         )}
-        <TouchableOpacity onPress={onCancel}>
+        <TouchableOpacity
+          onPress={onCancel}
+          accessibilityRole="button"
+          accessibilityLabel="Back to food search"
+        >
           <Text style={s.secondaryButtonText}>Back to search</Text>
         </TouchableOpacity>
       </View>
@@ -131,13 +141,19 @@ export function BarcodeScanner({
       <Text style={s.helpText}>Point the camera at the barcode on the package.</Text>
 
       <View style={{ flexDirection: "row", gap: 16 }}>
-        <TouchableOpacity onPress={onCancel}>
+        <TouchableOpacity
+          onPress={onCancel}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel scanning"
+        >
           <Text style={s.secondaryButtonText}>Cancel</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => {
             hasScanned.current = false;
           }}
+          accessibilityRole="button"
+          accessibilityLabel="Scan another barcode"
         >
           <Text style={s.secondaryButtonText}>Scan again</Text>
         </TouchableOpacity>

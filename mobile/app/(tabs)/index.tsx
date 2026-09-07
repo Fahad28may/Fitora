@@ -19,6 +19,16 @@ const PRIORITY_COLOR: Record<RecommendationPriority, string> = {
   info: "#059669",
 };
 
+// §44: never communicate important information through colour alone. The
+// coloured rule is decoration; this word is what actually carries the
+// priority, for anyone who can't distinguish the colours or is using a
+// screen reader.
+const PRIORITY_LABEL: Record<RecommendationPriority, string> = {
+  warning: "Worth attention",
+  suggestion: "Suggestion",
+  info: "Note",
+};
+
 export default function HomeScreen(): React.JSX.Element {
   const { user, logout } = useAuth();
   const [dashboard, setDashboard] = useState<DashboardOut | null>(null);
@@ -79,6 +89,8 @@ export default function HomeScreen(): React.JSX.Element {
       {needsSetup ? (
         <Pressable
           style={screenStyles.setupCard}
+          accessibilityRole="button"
+          accessibilityLabel="Finish setting up your profile and goal"
           onPress={() => router.push("/onboarding")}
         >
           <Text style={screenStyles.setupCardTitle}>Finish setting up</Text>
@@ -126,6 +138,8 @@ export default function HomeScreen(): React.JSX.Element {
                   key={amount}
                   style={screenStyles.secondaryButton}
                   onPress={() => void handleAddWater(amount)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add ${amount} millilitres of water`}
                 >
                   <Text style={screenStyles.secondaryButtonText}>+{amount} ml</Text>
                 </Pressable>
@@ -196,6 +210,8 @@ export default function HomeScreen(): React.JSX.Element {
           {recommendations.map((rec, index) => (
             <View
               key={`${rec.category}-${index}`}
+              accessible
+              accessibilityLabel={`${PRIORITY_LABEL[rec.priority]}: ${rec.title}. ${rec.detail}`}
               style={{
                 borderLeftWidth: 3,
                 borderLeftColor: PRIORITY_COLOR[rec.priority],
@@ -203,6 +219,14 @@ export default function HomeScreen(): React.JSX.Element {
                 gap: 2,
               }}
             >
+              <Text
+                style={[
+                  screenStyles.body,
+                  { fontWeight: "600", color: PRIORITY_COLOR[rec.priority], fontSize: 12 },
+                ]}
+              >
+                {PRIORITY_LABEL[rec.priority].toUpperCase()}
+              </Text>
               <Text style={[screenStyles.body, { fontWeight: "600", color: "#111827" }]}>
                 {rec.title}
               </Text>

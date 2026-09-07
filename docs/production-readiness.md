@@ -54,6 +54,13 @@ Status values: `PASS`, `FAIL`, `NEEDS REVIEW`. This checklist existing does **no
 | Logging | NEEDS REVIEW | Structured JSON logs, no secrets. Security-sensitive operations additionally recorded in `audit_events` (register, login success/failure, logout, consent change, export, deletion); the email on a failed login is hashed, never stored raw. Log shipping/retention not yet decided |
 | Monitoring | NEEDS REVIEW | Not yet implemented |
 
+## Accessibility
+| Item | Status | Notes |
+|---|---|---|
+| Screen reader names | PASS | Every TouchableOpacity/Pressable/TextInput/Switch in `app/` and `src/` has an accessible name, enforced by `src/ui/__tests__/accessibility.test.ts` which fails the build on a new unlabelled control |
+| Not colour alone | PASS | Recommendation priority carries a text label beside its coloured rule; selected chips expose `accessibilityState.selected` |
+| Contrast, touch targets, reduced motion | NEEDS REVIEW | Not audited against WCAG ratios; no reduced-motion handling (the app has little motion today) |
+
 ## Testing
 | Item | Status | Notes |
 |---|---|---|

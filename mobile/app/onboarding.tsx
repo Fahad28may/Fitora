@@ -57,6 +57,11 @@ function Chips<T extends string>({
             key={option.value}
             style={[s.optionChip, selected && s.optionChipSelected]}
             onPress={() => onChange(option.value)}
+            accessibilityRole="radio"
+            // Selection is shown by colour too; state makes it available to a
+            // screen reader rather than colour alone (§44).
+            accessibilityState={{ selected }}
+            accessibilityLabel={option.label}
           >
             <Text style={[s.optionChipText, selected && s.optionChipTextSelected]}>
               {option.label}
@@ -133,6 +138,7 @@ export default function OnboardingScreen(): React.JSX.Element {
       <TextInput
         style={s.input}
         placeholder="1995-06-15"
+          accessibilityLabel="1995-06-15"
         value={dateOfBirth}
         onChangeText={setDateOfBirth}
       />
@@ -144,6 +150,7 @@ export default function OnboardingScreen(): React.JSX.Element {
       <TextInput
         style={s.input}
         placeholder="170"
+          accessibilityLabel="170"
         keyboardType="numeric"
         value={heightCm}
         onChangeText={setHeightCm}
@@ -162,6 +169,7 @@ export default function OnboardingScreen(): React.JSX.Element {
       <TextInput
         style={s.input}
         placeholder="70"
+          accessibilityLabel="70"
         keyboardType="numeric"
         value={currentWeightKg}
         onChangeText={setCurrentWeightKg}
@@ -186,6 +194,8 @@ export default function OnboardingScreen(): React.JSX.Element {
             style={s.secondaryButton}
             onPress={() => void submit(true)}
             disabled={isSubmitting}
+            accessibilityRole="button"
+            accessibilityLabel="I understand the warning — continue with this goal anyway"
           >
             <Text style={s.secondaryButtonText}>I understand — continue anyway</Text>
           </TouchableOpacity>
@@ -195,6 +205,8 @@ export default function OnboardingScreen(): React.JSX.Element {
           style={[s.button, (!canSubmit || isSubmitting) && s.buttonDisabled]}
           onPress={() => void submit(false)}
           disabled={!canSubmit || isSubmitting}
+          accessibilityRole="button"
+          accessibilityLabel="Save profile and goal"
         >
           {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>Save</Text>}
         </TouchableOpacity>

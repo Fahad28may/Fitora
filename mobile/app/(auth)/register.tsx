@@ -48,6 +48,7 @@ export default function RegisterScreen(): React.JSX.Element {
       <TextInput
         style={styles.input}
         placeholder="Email"
+        accessibilityLabel="Email address"
         autoCapitalize="none"
         keyboardType="email-address"
         textContentType="emailAddress"
@@ -57,6 +58,7 @@ export default function RegisterScreen(): React.JSX.Element {
       <TextInput
         style={styles.input}
         placeholder="Password (min 8 characters)"
+        accessibilityLabel="Password, at least 8 characters"
         secureTextEntry
         textContentType="newPassword"
         value={password}
@@ -72,6 +74,8 @@ export default function RegisterScreen(): React.JSX.Element {
         style={styles.button}
         onPress={handleSubmit}
         disabled={isSubmitting || !email || password.length < MIN_PASSWORD_LENGTH}
+        accessibilityRole="button"
+        accessibilityLabel="Create account"
       >
         {isSubmitting ? (
           <ActivityIndicator color="#fff" />

@@ -304,6 +304,7 @@ export default function NutritionScreen(): React.JSX.Element {
                 style={[s.button, { marginTop: 0 }]}
                 onPress={() => void handleSaveCategoryAsMeal(savingMealFor)}
                 accessibilityRole="button"
+                accessibilityLabel={`Save today's ${savingMealFor} as a reusable meal`}
               >
                 <Text style={s.buttonText}>Save</Text>
               </TouchableOpacity>
@@ -318,6 +319,8 @@ export default function NutritionScreen(): React.JSX.Element {
               setShowScanner((v) => !v);
               setShowNLInput(false);
             }}
+            accessibilityRole="button"
+            accessibilityLabel={showScanner ? "Close the barcode scanner" : "Scan a barcode"}
           >
             <Text style={s.secondaryButtonText}>
               {showScanner ? "Close scanner" : "Scan a barcode"}
@@ -335,7 +338,13 @@ export default function NutritionScreen(): React.JSX.Element {
               503 needs to stay readable after the user closes the camera. */}
           {scanError ? <Text style={s.error}>{scanError}</Text> : null}
 
-          <TouchableOpacity onPress={() => setShowNLInput((v) => !v)}>
+          <TouchableOpacity
+            onPress={() => setShowNLInput((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={
+              showNLInput ? "Search foods instead" : "Describe what you ate instead"
+            }
+          >
             <Text style={s.secondaryButtonText}>
               {showNLInput ? "Search instead" : "Describe what you ate instead"}
             </Text>
@@ -347,6 +356,7 @@ export default function NutritionScreen(): React.JSX.Element {
                 <TextInput
                   style={[s.input, { flex: 1 }]}
                   placeholder="e.g. two eggs and a cup of chai"
+                  accessibilityLabel="Describe what you ate"
                   value={nlText}
                   onChangeText={setNlText}
                   onSubmitEditing={() => void handleParse()}
@@ -354,6 +364,8 @@ export default function NutritionScreen(): React.JSX.Element {
                 <TouchableOpacity
                   style={[s.button, { marginTop: 0 }]}
                   onPress={() => void handleParse()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Parse what you described into foods"
                 >
                   {isParsing ? (
                     <ActivityIndicator color="#fff" />
@@ -377,6 +389,8 @@ export default function NutritionScreen(): React.JSX.Element {
                         key={food.id}
                         onPress={() => handleSelectParsedMatch(item, food)}
                         style={{ paddingVertical: 4 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Choose ${food.name}`}
                       >
                         <Text style={screenStyles.body}>
                           → {food.name} ({food.serving_description}, {food.calories_kcal} kcal)
@@ -393,11 +407,17 @@ export default function NutritionScreen(): React.JSX.Element {
             <TextInput
               style={[s.input, { flex: 1 }]}
               placeholder="Search foods (e.g. egg)"
+              accessibilityLabel="Search foods"
               value={query}
               onChangeText={setQuery}
               onSubmitEditing={() => void handleSearch()}
             />
-            <TouchableOpacity style={[s.button, { marginTop: 0 }]} onPress={() => void handleSearch()}>
+            <TouchableOpacity
+              style={[s.button, { marginTop: 0 }]}
+              onPress={() => void handleSearch()}
+              accessibilityRole="button"
+              accessibilityLabel="Search foods"
+            >
               {isSearching ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>Go</Text>}
             </TouchableOpacity>
           </View>
@@ -411,6 +431,8 @@ export default function NutritionScreen(): React.JSX.Element {
                 setSelectedFood(food);
                 setLogSource("search");
               }}
+              accessibilityRole="button"
+              accessibilityLabel={`Select ${food.name}`}
             >
               <Text style={screenStyles.cardTitle}>{food.name}</Text>
               <Text style={screenStyles.body}>
@@ -420,7 +442,11 @@ export default function NutritionScreen(): React.JSX.Element {
           ))}
 
           {hasSearched && !isSearching && results.length === 0 && !showCreateForm ? (
-            <TouchableOpacity onPress={() => setShowCreateForm(true)}>
+            <TouchableOpacity
+              onPress={() => setShowCreateForm(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Create a custom food"
+            >
               <Text style={s.secondaryButtonText}>Can&apos;t find it? Create a custom food</Text>
             </TouchableOpacity>
           ) : null}
@@ -443,6 +469,7 @@ export default function NutritionScreen(): React.JSX.Element {
                 <TextInput
                   style={[s.input, { flex: 1 }]}
                   placeholder="Quantity"
+          accessibilityLabel="Quantity"
                   keyboardType="numeric"
                   value={quantity}
                   onChangeText={setQuantity}
@@ -451,6 +478,9 @@ export default function NutritionScreen(): React.JSX.Element {
                   {(["serving", "gram"] as LogUnit[]).map((u) => (
                     <TouchableOpacity
                       key={u}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: unit === u }}
+                      accessibilityLabel={`Log by ${u}`}
                       style={[s.optionChip, unit === u && s.optionChipSelected]}
                       onPress={() => setUnit(u)}
                     >
@@ -468,6 +498,9 @@ export default function NutritionScreen(): React.JSX.Element {
                     key={category}
                     style={[s.optionChip, mealCategory === category && s.optionChipSelected]}
                     onPress={() => setMealCategory(category)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: mealCategory === category }}
+                    accessibilityLabel={category}
                   >
                     <Text
                       style={[
@@ -487,6 +520,8 @@ export default function NutritionScreen(): React.JSX.Element {
                 style={[s.button, (!quantity || isLogging) && s.buttonDisabled]}
                 onPress={() => void handleLog()}
                 disabled={!quantity || isLogging}
+                accessibilityRole="button"
+                accessibilityLabel="Log this food"
               >
                 {isLogging ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>Add to diary</Text>}
               </TouchableOpacity>
@@ -508,7 +543,11 @@ export default function NutritionScreen(): React.JSX.Element {
           <Text style={screenStyles.body}>
             {item.quantity} {item.unit} · {item.meal_category}
           </Text>
-          <TouchableOpacity onPress={() => void handleDeleteEntry(item.id)}>
+          <TouchableOpacity
+            onPress={() => void handleDeleteEntry(item.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete ${item.food_name} from the diary`}
+          >
             <Text style={[s.error, { fontSize: 13 }]}>Delete</Text>
           </TouchableOpacity>
         </View>
@@ -567,16 +606,19 @@ function CreateFoodForm({
   return (
     <View style={[s.card, { gap: 10 }]}>
       <Text style={screenStyles.cardTitle}>New custom food</Text>
-      <TextInput style={s.input} placeholder="Name" value={name} onChangeText={setName} />
+      <TextInput style={s.input} placeholder="Name"
+          accessibilityLabel="Name" value={name} onChangeText={setName} />
       <TextInput
         style={s.input}
         placeholder="Serving description (e.g. 1 cup)"
+          accessibilityLabel="Serving description (e.g. 1 cup)"
         value={servingDescription}
         onChangeText={setServingDescription}
       />
       <TextInput
         style={s.input}
         placeholder="Serving size (grams)"
+          accessibilityLabel="Serving size (grams)"
         keyboardType="numeric"
         value={servingGrams}
         onChangeText={setServingGrams}
@@ -584,6 +626,7 @@ function CreateFoodForm({
       <TextInput
         style={s.input}
         placeholder="Calories (kcal) per serving"
+          accessibilityLabel="Calories (kcal) per serving"
         keyboardType="numeric"
         value={calories}
         onChangeText={setCalories}
@@ -591,6 +634,7 @@ function CreateFoodForm({
       <TextInput
         style={s.input}
         placeholder="Protein (g) per serving"
+          accessibilityLabel="Protein (g) per serving"
         keyboardType="numeric"
         value={protein}
         onChangeText={setProtein}
@@ -598,6 +642,7 @@ function CreateFoodForm({
       <TextInput
         style={s.input}
         placeholder="Carbs (g) per serving"
+          accessibilityLabel="Carbs (g) per serving"
         keyboardType="numeric"
         value={carbs}
         onChangeText={setCarbs}
@@ -605,6 +650,7 @@ function CreateFoodForm({
       <TextInput
         style={s.input}
         placeholder="Fat (g) per serving"
+          accessibilityLabel="Fat (g) per serving"
         keyboardType="numeric"
         value={fat}
         onChangeText={setFat}
@@ -614,6 +660,8 @@ function CreateFoodForm({
         style={[s.button, (!canSubmit || isSubmitting) && s.buttonDisabled]}
         onPress={() => void handleSubmit()}
         disabled={!canSubmit || isSubmitting}
+        accessibilityRole="button"
+        accessibilityLabel="Create custom food"
       >
         {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>Create food</Text>}
       </TouchableOpacity>
