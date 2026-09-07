@@ -113,8 +113,10 @@ Actual performed instance of a workout (log, not template).
 Delete is immediate and hard — it removes the object from storage and the row (no `deleted_at` soft-delete column). Reads are served only via short-lived presigned URLs generated per request. Access is authorized by row ownership, not key secrecy.
 
 ### `activity_entries`
-| id | user_id FK, indexed with (user_id, logged_at) | logged_at | activity_type (walking/running/cycling/swimming/strength/sport/other) | duration_min | distance_km (nullable) | steps (nullable) | calories_burned (nullable, user estimate) | source (manual/apple_health/health_connect/wearable) | notes (nullable) |
-Manual logging only in Phase 2 (API always writes `source=manual`); the device sources are modeled now so Phase 4 health integrations populate them without a migration.
+| id | user_id FK, indexed with (user_id, logged_at) | logged_at | activity_type (walking/running/cycling/swimming/strength/sport/other) | duration_min | distance_km (nullable) | steps (nullable) | calories_burned (nullable, user estimate) | source (manual/apple_health/health_connect/wearable) | notes (nullable) | external_id (nullable; the device's own record id) |
+Two write paths, deliberately separate. `POST /activity-entries` always writes `source=manual`; `POST /activity-entries/sync` writes only device sources and requires the user's `wearable_access` consent. "The user typed this" and "a device reported this" are different claims, and neither endpoint can make the other's.
+
+Unique on `(user_id, source, external_id)`. A health app re-reports the same workout on every sync, so entries are matched and updated in place rather than appended — re-syncing a window is a no-op, which is the normal case rather than the exception. Manual entries have a NULL `external_id` and are exempt, so a user can still log the same walk twice by hand if they mean to.
 
 ## AI (Phase 3+)
 

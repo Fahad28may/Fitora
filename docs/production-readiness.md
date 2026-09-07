@@ -54,6 +54,12 @@ Status values: `PASS`, `FAIL`, `NEEDS REVIEW`. This checklist existing does **no
 | Logging | NEEDS REVIEW | Structured JSON logs, no secrets. Security-sensitive operations additionally recorded in `audit_events` (register, login success/failure, logout, consent change, export, deletion); the email on a failed login is hashed, never stored raw. Log shipping/retention not yet decided |
 | Monitoring | NEEDS REVIEW | Not yet implemented |
 
+## Health integrations
+| Item | Status | Notes |
+|---|---|---|
+| Device activity ingestion (server) | PASS | `POST /activity-entries/sync` — consent-gated, idempotent by device record id, bounds-checked like manual entry, provenance-preserving. Covered by `tests/test_activity_sync.py` |
+| HealthKit / Health Connect (device) | **Not started** | Requires leaving Expo Go for custom dev builds, a paid Apple Developer account for iOS, and physical devices. Cannot be verified in CI. See `health-integrations.md` |
+
 ## Resilience
 | Item | Status | Notes |
 |---|---|---|

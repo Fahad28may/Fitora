@@ -41,7 +41,7 @@ Priorities, not a schedule. Do not implement a later phase's features before the
 ## Phase 4 — in progress
 - Barcode scanning ✅ backend done — `GET /foods/barcode/{barcode}` against Open Food Facts (free, no API key). Crowd-sourced nutrition is validated against plausibility bounds before import, results are cached in the local `foods` table, and the provider is opt-in (`FOOD_DB_PROVIDER`) so no barcode leaves the server by default. Mobile scanner UI ✅ (expo-camera, EAN/UPC only, permission-gated, with a crowd-sourced-data caveat shown before logging)
 - Food photo recognition ✅ §7/§8 — `POST /ai/recognize-food` against a free OpenRouter vision model (`minimax/minimax-m3:free`, live-verified). Calories are always a range, never an exact number, and an overconfident range is widened server-side rather than trusted. The image is processed in memory and never stored. Opt-in via `AI_MODEL_VISION`; camera + library capture on the Nutrition tab
-- Apple Health / Android Health Connect / wearable integrations
+- Apple Health / Android Health Connect / wearable integrations ◐ **server side done**, device side blocked. `POST /activity-entries/sync` ingests device-reported activity: consent-gated on `wearable_access`, idempotent by the device's `external_id`, bounds-checked exactly like manual entries, and labelled with its real source. The native side (HealthKit / Health Connect) needs a custom development build and, for iOS, an Apple Developer account — see `docs/health-integrations.md`
 
 ## Phase 5
 - Advanced analytics

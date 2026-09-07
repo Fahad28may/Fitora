@@ -10,6 +10,11 @@ from app.models.activity_entry import ActivitySource
 from app.models.user import User
 from app.repositories.activity_repository import ActivityRepository
 from app.schemas.activity import ActivityEntryCreateRequest, ActivityEntryOut
+from app.schemas.activity_sync import ActivitySyncRequest, ActivitySyncResult
+from app.services.activity_sync_service import (
+    ActivitySyncService,
+    WearableConsentRequiredError,
+)
 from app.services.idempotency_service import run_idempotent
 
 router = APIRouter(prefix="/activity-entries", tags=["activity"])
@@ -73,3 +78,35 @@ async def delete_activity_entry(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     await repo.delete(entry)
     await db.commit()
+
+
+@router.post("/sync", response_model=ActivitySyncResult)
+async def sync_device_activity(
+    payload: ActivitySyncRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ActivitySyncResult:
+    """Ingest activity reported by a health app or wearable (§15).
+
+    Requires the user's wearable-access consent, which is separate from the
+    OS-level permission the device grants: that is the device agreeing to hand
+    data over, this is the user agreeing that Fitora may store it — and they
+    can withdraw it here without uninstalling anything.
+
+    Idempotent by `external_id`, because a health app re-reports the same
+    workout on every sync.
+    """
+    try:
+        return await ActivitySyncService(db).sync(
+            user_id=current_user.id,
+            source=payload.source,
+            entries=payload.entries,
+        )
+    except WearableConsentRequiredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Turn on \"Read data from wearables\" in Settings → Privacy before "
+                "syncing device activity."
+            ),
+        ) from exc
