@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_ai_client, get_current_user
@@ -18,16 +18,19 @@ from app.schemas.ai_actions import (
     ConfirmActionRequest,
     ProposedActionOut,
 )
+from app.schemas.ai_vision import PhotoRecognitionOut
 from app.services.ai.action_service import AIActionService
 from app.services.ai.client import AIClient
 from app.services.ai.coach_service import CoachService
 from app.services.ai.exceptions import AIOutputValidationError, AIProviderError
 from app.services.ai.food_parser_service import FoodParserService
+from app.services.ai.photo_recognition_service import PhotoRecognitionService
 from app.services.food_diary_service import (
     FoodNotAccessibleError,
     FoodNotFoundError,
     MissingServingSizeError,
 )
+from app.services.storage.image_validation import MAX_PHOTO_BYTES, sniff_image
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -43,6 +46,82 @@ def _require_ai_client(ai_client: AIClient | None = Depends(get_ai_client)) -> A
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=_AI_DISABLED_DETAIL
         )
     return ai_client
+
+
+_VISION_DISABLED_DETAIL = (
+    "Photo food recognition is not configured on this server. Search, manual "
+    "entry, barcode and text description all work without it — see "
+    "docs/ai-safety.md."
+)
+
+
+def _require_vision_model() -> str:
+    """Photo recognition is separately switchable from the rest of AI: it is
+    the only feature that sends a user's photograph to a third party, so an
+    operator opts into it explicitly rather than getting it with the key."""
+    settings = get_settings()
+    if not settings.vision_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=_VISION_DISABLED_DETAIL,
+        )
+    return settings.ai_model_vision
+
+
+@router.post("/recognize-food", response_model=PhotoRecognitionOut)
+@limiter.limit(ai_rate_limit)
+async def recognize_food_photo(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    ai_client: AIClient = Depends(_require_ai_client),
+    vision_model: str = Depends(_require_vision_model),
+) -> PhotoRecognitionOut:
+    """Suggest foods visible in a photo (§7). Never logs anything.
+
+    The image is read into memory, sent to the vision provider, and dropped
+    when this request ends — it is not written to disk, not put in object
+    storage, and not recorded against the user (§8). Nothing identifying the
+    user is sent with it.
+    """
+    data = await file.read()
+    if len(data) > MAX_PHOTO_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="That photo is too large — try a smaller one.",
+        )
+    # Sniff the real type from the bytes; never trust the declared
+    # Content-Type, which is attacker-controlled.
+    sniffed = sniff_image(data)
+    if sniffed is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="That file isn't a JPEG, PNG or WebP image.",
+        )
+    content_type, _ = sniffed
+
+    try:
+        return await PhotoRecognitionService(db).recognize(
+            ai_client=ai_client,
+            model=vision_model,
+            user_id=current_user.id,
+            image_bytes=data,
+            content_type=content_type,
+        )
+    except AIOutputValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                "Couldn't read that photo reliably — try a clearer one, or log "
+                "the food by search instead."
+            ),
+        ) from exc
+    except AIProviderError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Photo recognition is temporarily unavailable — log manually instead.",
+        ) from exc
 
 
 @router.post("/parse-food", response_model=FoodParseResponse)

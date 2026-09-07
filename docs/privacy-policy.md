@@ -30,6 +30,14 @@ If you use barcode scanning, the app asks for camera permission. The camera is u
 
 Barcode lookup is optional. If the server operator has not configured a food database provider, scanning is unavailable and no barcode is ever sent anywhere.
 
+## 4b. Food photos
+
+If you use photo food recognition, the photo you choose is uploaded, sent to the AI provider for identification, and then discarded. It is **not** saved on our servers, not attached to your account, and not used to train anything. Nothing identifying you is sent with it — the request carries the image and a fixed instruction, nothing else.
+
+The result is an estimate, and always a range rather than an exact number. Nothing is added to your diary until you pick a food and confirm it.
+
+Photo recognition is optional and off unless the server operator has configured a vision model. Progress photos are a separate feature with different handling — those *are* stored, in a private bucket, until you delete them (see §2).
+
 ## 5. Third-party providers
 
 Listed, with what they receive and why, in [`third-party-services.md`](third-party-services.md). We review each provider's data-processing terms before integrating them.

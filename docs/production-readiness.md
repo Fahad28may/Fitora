@@ -31,10 +31,10 @@ Status values: `PASS`, `FAIL`, `NEEDS REVIEW`. This checklist existing does **no
 | Item | Status | Notes |
 |---|---|---|
 | Prompt injection | NEEDS REVIEW | Architectural defenses implemented (data/instruction separation, schema validation, length limits — see `ai-safety.md`); not adversarially tested against a live model |
-| Data leakage | NEEDS REVIEW | Only dashboard/weight/workout data sent to AI provider, confirmed by code review; provider's own retention/training policy not yet independently verified |
+| Data leakage | NEEDS REVIEW | Only dashboard/weight/workout data sent to AI provider, confirmed by code review; photo recognition sends the image and a fixed prompt only, asserted by test; provider's own retention/training policy not yet independently verified |
 | Tool authorization | PASS | Tool-calling built as propose→confirm (`log_weight`/`log_water`/`log_food`). Write path (`/ai/actions/confirm`) calls no model, takes `user_id` from the session, re-validates every parameter against manual-endpoint bounds, and enforces existing ownership checks. Enforced by construction and covered by `tests/test_ai_actions.py`; does not depend on model compliance. Re-review when `create_workout`/`create_meal` are added |
 | Unsafe health advice | NEEDS REVIEW | System-prompt rules in place; actual model compliance not verified without a live `AI_API_KEY` |
-| Output validation | PASS | Food parsing: Pydantic schema + one retry + 422 fallback. Coach: non-empty, length-capped |
+| Output validation | PASS | Food parsing: Pydantic schema + one retry + 422 fallback. Coach: non-empty, length-capped. Photo recognition: schema has no scalar calorie field at all, so an exact-number answer is unrepresentable, and any range narrower than 20% of its midpoint is widened before it reaches the user |
 
 ## Files
 | Item | Status | Notes |

@@ -1,3 +1,4 @@
+import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -8,7 +9,12 @@ import {
   View,
 } from "react-native";
 
-import { aiApi, type ParsedFoodItemOut } from "../../src/api/ai";
+import {
+  aiApi,
+  recognizeFoodPhoto,
+  type ParsedFoodItemOut,
+  type RecognizedFoodItemOut,
+} from "../../src/api/ai";
 import { ApiError } from "../../src/api/client";
 import { foodDiaryApi } from "../../src/api/foodDiary";
 import { foodsApi } from "../../src/api/foods";
@@ -55,6 +61,11 @@ export default function NutritionScreen(): React.JSX.Element {
   const [showScanner, setShowScanner] = useState(false);
   const [isLookingUpBarcode, setIsLookingUpBarcode] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+
+  const [photoItems, setPhotoItems] = useState<RecognizedFoodItemOut[] | null>(null);
+  const [photoNote, setPhotoNote] = useState("");
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [isRecognizing, setIsRecognizing] = useState(false);
 
   const [showNLInput, setShowNLInput] = useState(false);
   const [nlText, setNlText] = useState("");
@@ -165,6 +176,64 @@ export default function NutritionScreen(): React.JSX.Element {
     } finally {
       setIsLookingUpBarcode(false);
     }
+  }
+
+  async function handleRecognizePhoto(fromCamera: boolean): Promise<void> {
+    setPhotoError(null);
+    const permission = fromCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setPhotoError(
+        fromCamera
+          ? "Camera access is off for Fitora. Enable it in settings, or pick a photo instead."
+          : "Photo access is off for Fitora. Enable it in settings, or take a photo instead.",
+      );
+      return;
+    }
+
+    const picker = fromCamera ? ImagePicker.launchCameraAsync : ImagePicker.launchImageLibraryAsync;
+    const result = await picker({
+      mediaTypes: ["images"],
+      // Recognition doesn't need a full-resolution image, and a smaller one
+      // means less of the user's photo travelling to the vision provider.
+      quality: 0.6,
+      allowsEditing: false,
+    });
+    if (result.canceled || result.assets.length === 0) return;
+
+    const asset = result.assets[0];
+    setIsRecognizing(true);
+    setPhotoItems(null);
+    try {
+      const response = await recognizeFoodPhoto(asset.uri, asset.mimeType ?? "image/jpeg");
+      setPhotoItems(response.items);
+      setPhotoNote(response.overall_note);
+      if (response.items.length === 0) {
+        setPhotoError("Couldn't identify any food in that photo — try search instead.");
+      }
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 503) {
+        setPhotoError(
+          "Photo recognition isn't configured on this server — search or log manually instead.",
+        );
+      } else {
+        setPhotoError(
+          err instanceof ApiError ? err.message : "Could not read that photo.",
+        );
+      }
+    } finally {
+      setIsRecognizing(false);
+    }
+  }
+
+  function handleSelectPhotoMatch(item: RecognizedFoodItemOut, food: FoodOut): void {
+    // The confirmed food is what gets logged — never the model's estimate.
+    setSelectedFood(food);
+    setLogSource("photo");
+    setQuantity(String(item.estimated_quantity));
+    setUnit(item.unit === "gram" ? "gram" : "serving");
+    setPhotoItems(null);
   }
 
   async function handleParse(): Promise<void> {
@@ -312,6 +381,77 @@ export default function NutritionScreen(): React.JSX.Element {
           ) : null}
 
           {mealError ? <Text style={s.error}>{mealError}</Text> : null}
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <TouchableOpacity
+              style={s.optionChip}
+              onPress={() => void handleRecognizePhoto(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Take a photo of your food to identify it"
+            >
+              <Text style={s.optionChipText}>Photo of my meal</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.optionChip}
+              onPress={() => void handleRecognizePhoto(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Choose a food photo from your library"
+            >
+              <Text style={s.optionChipText}>Choose photo</Text>
+            </TouchableOpacity>
+            {isRecognizing ? <ActivityIndicator /> : null}
+          </View>
+          {photoError ? <Text style={s.error}>{photoError}</Text> : null}
+
+          {photoItems !== null && photoItems.length > 0 ? (
+            <View style={[s.card, { gap: 10 }]}>
+              <Text style={screenStyles.cardTitle}>What I think I see</Text>
+              {/* §7: estimates, never presented as measurement. The photo
+                  itself is not kept — the server drops it after reading. */}
+              <Text style={s.warning}>
+                These are estimates from a photo, not measurements. Check them against what
+                you actually ate before logging. Your photo isn&apos;t saved.
+              </Text>
+              {photoNote ? <Text style={s.helpText}>{photoNote}</Text> : null}
+
+              {photoItems.map((item, index) => (
+                <View key={`${item.name}-${index}`} style={{ gap: 4 }}>
+                  <Text style={screenStyles.body}>
+                    {item.name} — about {item.estimated_quantity} {item.unit}
+                  </Text>
+                  <Text style={s.helpText}>
+                    Roughly {item.calories_min}–{item.calories_max} kcal ·{" "}
+                    {item.confidence} confidence
+                    {item.portion_note ? ` · ${item.portion_note}` : ""}
+                  </Text>
+                  {item.ingredients.length > 0 ? (
+                    <Text style={s.helpText}>
+                      Likely contains: {item.ingredients.join(", ")}
+                    </Text>
+                  ) : null}
+                  {item.matches.length === 0 ? (
+                    <Text style={s.helpText}>
+                      No matching food found — search for it or add it manually.
+                    </Text>
+                  ) : (
+                    item.matches.map((food) => (
+                      <TouchableOpacity
+                        key={food.id}
+                        onPress={() => handleSelectPhotoMatch(item, food)}
+                        style={{ paddingVertical: 4 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Log ${food.name} for ${item.name}`}
+                      >
+                        <Text style={screenStyles.body}>
+                          → {food.name} ({food.serving_description}, {food.calories_kcal} kcal)
+                        </Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </View>
+              ))}
+            </View>
+          ) : null}
 
           <TouchableOpacity
             onPress={() => {

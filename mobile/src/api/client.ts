@@ -21,7 +21,11 @@ async function rawRequest(
   accessToken?: string | null
 ): Promise<Response> {
   const headers = new Headers(options.headers);
-  headers.set("Content-Type", "application/json");
+  // FormData must set its own Content-Type: the runtime appends the multipart
+  // boundary, and overriding it here produces a body the server can't parse.
+  if (!(options.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
   if (accessToken) {
     headers.set("Authorization", `Bearer ${accessToken}`);
   }

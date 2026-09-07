@@ -11,9 +11,36 @@ from app.services.ai.exceptions import AIProviderError
 DEFAULT_MAX_TOKENS = 800
 
 
+class TextPart(TypedDict):
+    type: Literal["text"]
+    text: str
+
+
+class ImageUrlSpec(TypedDict):
+    url: str
+
+
+class ImagePart(TypedDict):
+    """An inline image, as a `data:` URI.
+
+    Sent inline rather than as a hosted URL on purpose: a URL would mean
+    storing the user's food photo somewhere publicly fetchable, which §8 is
+    explicit about not doing. Inline means the image exists only in the
+    request body.
+    """
+
+    type: Literal["image_url"]
+    image_url: ImageUrlSpec
+
+
+ContentPart = TextPart | ImagePart
+
+
 class AIMessage(TypedDict):
     role: Literal["system", "user", "assistant"]
-    content: str
+    #: A plain string for text-only turns, or a list of parts for multimodal
+    #: ones. Both shapes are what the OpenAI-compatible API accepts.
+    content: str | list[ContentPart]
 
 
 class AIClient(Protocol):

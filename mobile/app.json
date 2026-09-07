@@ -36,7 +36,14 @@
           "recordAudioAndroid": false
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Fitora uses photos only to identify food you choose to scan. The image is sent for recognition and not stored.",
+          "cameraPermission": "Fitora uses the camera to read barcodes and to identify food in photos you take. Photos are not stored."
+        }
+      ]
     ]
   }
 }

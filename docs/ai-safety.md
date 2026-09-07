@@ -77,8 +77,21 @@ Malformed AI output is never executed against the database — there's no execut
 | NL food parsing | The food-log text only (e.g. "two eggs and a roti") | Extract structured food items | Per OpenRouter/model-provider policy — not yet independently verified, see `third-party-services.md` | Not confirmed — do not assume "no" without checking the specific model's terms before production |
 | AI coach | The message, plus structured JSON: today's dashboard (calorie/macro/water progress), last 5 weight entries, last 3 workout sessions' start times/notes, and up to the last 20 prior coach messages for conversational context | Answer questions like "why is my weight not changing" | Same as above | Same as above |
 | AI actions (propose) | The user's natural-language request only (e.g. "log a banana for breakfast") — no dashboard or history is sent | Turn the request into ONE structured, confirmable action proposal | Same as above | Same as above |
+| Photo food recognition | The image bytes, inline as a `data:` URI, plus a fixed prompt. Nothing else — no user id, no email, no filename, and no hosted URL (a URL would mean storing the photo somewhere fetchable, which §8 forbids). Asserted by `test_the_image_is_sent_inline_and_nothing_else_is` | Identify likely foods so the user can pick a real one to log | Same as above | Same as above — **and food photos are a category worth checking specifically** before enabling this in production |
 
 Never sent to any AI provider: email address, full name, password, authentication tokens, payment information — confirmed by what `coach_service.py`'s context builder actually queries (dashboard/weight/workout repositories only, never the user repository).
+
+## Food photos (§8)
+
+Photo recognition holds the image only for the length of the request:
+
+- Read into memory from the upload, base64'd into the provider request, dropped when the request ends.
+- Never written to disk, never put in object storage, never associated with any stored row. `test_a_recognized_photo_leaves_no_stored_record` asserts it.
+- The response carries `image_retained: false` so a client can state this to the user rather than the user having to take it on trust.
+- Type is sniffed from the bytes (JPEG/PNG/WebP); the declared Content-Type is attacker-controlled and ignored.
+- Off unless an operator sets `AI_MODEL_VISION`. It is the only feature that sends a photograph anywhere, so it is opted into separately from the rest of AI rather than arriving with the API key.
+
+Progress photos are a *different* feature with deliberately different handling: those are stored, in a private bucket, until the user deletes them. Don't conflate the two.
 
 ## Uncertainty & false precision
 
@@ -87,7 +100,14 @@ The coach's system prompt instructs it to state nutrition/calorie figures as app
 - Bad: "This meal contains exactly 647 calories."
 - Good: "Estimated: approximately 600–700 calories."
 
-Whether a given free-tier model actually complies is not independently verified without a live API key. The nutrition database, not the LLM, is the authoritative source for nutrition values in food parsing — the LLM only extracts item/quantity/unit, real calorie/macro values always come from `FoodNutrition` via the existing deterministic scaling in `nutrition_service.py`.
+For photo recognition this is enforced by construction rather than by prompt compliance:
+
+- `RecognizedFoodItem` has **no scalar calorie field**. There is only `calories_min`/`calories_max`, so "exactly 647 calories" is not expressible no matter what the model returns.
+- Any range narrower than 20% of its own midpoint is widened symmetrically before it reaches the user (`widen_narrow_range`). A model returning 646–648 kcal gets corrected rather than believed.
+- Each item carries an explicit `confidence`, and the response carries `is_estimate: true`.
+- The model's calorie estimate is *never* what gets logged. The user picks a real food from the database and confirms it; that food's deterministic nutrition is what reaches the diary.
+
+Whether a given free-tier model actually complies with the coach's prompt is not independently verified without a live API key. The nutrition database, not the LLM, is the authoritative source for nutrition values in food parsing — the LLM only extracts item/quantity/unit, real calorie/macro values always come from `FoodNutrition` via the existing deterministic scaling in `nutrition_service.py`.
 
 ## No AI dependency for core data
 

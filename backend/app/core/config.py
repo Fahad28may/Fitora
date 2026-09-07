@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     ai_model_actions: str = Field(
         default="nvidia/nemotron-3.5-lightning:free", alias="AI_MODEL_ACTIONS"
     )
+    # Photo food recognition. Separate from the text models because it
+    # needs a vision-capable one, and separately switchable because it is
+    # the only feature that sends an image anywhere.
+    ai_model_vision: str = Field(default="", alias="AI_MODEL_VISION")
     ai_request_timeout_seconds: float = Field(
         default=20.0, alias="AI_REQUEST_TIMEOUT_SECONDS"
     )
@@ -111,6 +115,13 @@ class Settings(BaseSettings):
     @property
     def ai_enabled(self) -> bool:
         return bool(self.ai_api_key)
+
+    @property
+    def vision_enabled(self) -> bool:
+        """Photo recognition needs both a key and an explicitly chosen
+        vision model. Left off unless an operator opts in: it is the only
+        feature that sends a user's photograph to a third party."""
+        return bool(self.ai_api_key and self.ai_model_vision)
 
     @property
     def food_db_enabled(self) -> bool:
