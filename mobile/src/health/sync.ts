@@ -10,8 +10,8 @@ import {
 import { ApiError } from "../api/client";
 import type { HealthProvider } from "./provider";
 
-const WATERMARK_KEY_PREFIX = "fitora.health.lastSync.v1";
-const SEEN_IDS_KEY_PREFIX = "fitora.health.seenIds.v1";
+const WATERMARK_STORAGE_PREFIX = "fitora.health.lastSync.v1";
+const SEEN_IDS_STORAGE_PREFIX = "fitora.health.seenIds.v1";
 
 /**
  * How many of the last sync's ids to remember for the stability check below.
@@ -76,7 +76,7 @@ export type HealthSyncOutcome =
   | { kind: "failed"; message: string; /** Pages that did land before the failure. */ partial: boolean };
 
 function watermarkKey(source: DeviceActivitySource): string {
-  return `${WATERMARK_KEY_PREFIX}.${source}`;
+  return `${WATERMARK_STORAGE_PREFIX}.${source}`;
 }
 
 function daysBefore(date: Date, days: number): Date {
@@ -84,7 +84,7 @@ function daysBefore(date: Date, days: number): Date {
 }
 
 function seenIdsKey(source: DeviceActivitySource): string {
-  return `${SEEN_IDS_KEY_PREFIX}.${source}`;
+  return `${SEEN_IDS_STORAGE_PREFIX}.${source}`;
 }
 
 /** Ids sent by the previous sync, or null when there is nothing usable. */
