@@ -69,7 +69,15 @@ describe("HealthSyncCard", () => {
 
   it("reports records the device got wrong instead of hiding them", async () => {
     registerHealthProvider(fakeProvider());
-    mockRun.mockResolvedValue({ kind: "synced", read: 5, dropped: 2, created: 3, updated: 0 });
+    mockRun.mockResolvedValue({
+      kind: "synced",
+      read: 5,
+      dropped: 2,
+      duplicateIds: 0,
+      created: 3,
+      updated: 0,
+      unstableIds: false,
+    });
 
     const view = await render(<HealthSyncCard hasWearableConsent />);
     await waitFor(() => expect(view.getByText("Sync now")).toBeTruthy());
@@ -93,5 +101,45 @@ describe("HealthSyncCard", () => {
     await fireEvent.press(view.getByText("Sync now"));
 
     await waitFor(() => expect(view.getByText(/Couldn't reach Fitora/)).toBeTruthy());
+  });
+
+  it("names Fitora as the culprit when the provider's ids aren't stable", async () => {
+    registerHealthProvider(fakeProvider());
+    mockRun.mockResolvedValue({
+      kind: "synced",
+      read: 3,
+      dropped: 0,
+      duplicateIds: 0,
+      created: 3,
+      updated: 0,
+      unstableIds: true,
+    });
+
+    const view = await render(<HealthSyncCard hasWearableConsent />);
+    await waitFor(() => expect(view.getByText("Sync now")).toBeTruthy());
+    await fireEvent.press(view.getByText("Sync now"));
+
+    // The user's device and data are fine; the bug is ours, and the message
+    // must not leave them hunting through their health app for it.
+    await waitFor(() => expect(view.getByText(/fault in Fitora/i)).toBeTruthy());
+  });
+
+  it("reports records skipped for a repeated id", async () => {
+    registerHealthProvider(fakeProvider());
+    mockRun.mockResolvedValue({
+      kind: "synced",
+      read: 4,
+      dropped: 0,
+      duplicateIds: 1,
+      created: 3,
+      updated: 0,
+      unstableIds: false,
+    });
+
+    const view = await render(<HealthSyncCard hasWearableConsent />);
+    await waitFor(() => expect(view.getByText("Sync now")).toBeTruthy());
+    await fireEvent.press(view.getByText("Sync now"));
+
+    await waitFor(() => expect(view.getByText(/1 skipped as repeated/)).toBeTruthy());
   });
 });

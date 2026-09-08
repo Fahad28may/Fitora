@@ -206,7 +206,15 @@ describe("healthSync.run", () => {
 
     const outcome = await healthSync.run({ provider, hasWearableConsent: true, now: NOW });
 
-    expect(outcome).toEqual({ kind: "synced", read: 0, dropped: 0, created: 0, updated: 0 });
+    expect(outcome).toEqual({
+      kind: "synced",
+      read: 0,
+      dropped: 0,
+      duplicateIds: 0,
+      created: 0,
+      updated: 0,
+      unstableIds: false,
+    });
     expect(mockSync).not.toHaveBeenCalled();
     expect(await healthSync.lastSyncedAt("apple_health")).toEqual(NOW);
   });
@@ -236,5 +244,144 @@ describe("healthSync.run", () => {
     await healthSync.forget("apple_health");
 
     expect(await healthSync.lastSyncedAt("apple_health")).toBeNull();
+  });
+
+  describe("guarding the one contract the interface can't enforce", () => {
+    // `external_id` must be the device's own record id. Nothing above the
+    // seam can force that, but two of its failure modes are detectable.
+    // See docs/health-integrations.md.
+
+    it("drops a record whose id collides with one already in the same read", async () => {
+      const provider = fakeProvider({
+        readActivity: jest.fn(async () => [
+          entry({ external_id: "same", activity_type: "running" }),
+          entry({ external_id: "same", activity_type: "cycling" }),
+        ]),
+      });
+
+      const outcome = await healthSync.run({ provider, hasWearableConsent: true, now: NOW });
+
+      // Sending both would let the second silently overwrite the first
+      // server-side, losing an activity the user really did.
+      expect(outcome).toMatchObject({ kind: "synced", duplicateIds: 1 });
+      const [, entries] = mockSync.mock.calls[0];
+      expect(entries).toHaveLength(1);
+      expect(entries[0].activity_type).toBe("running");
+    });
+
+    it("notices when a provider mints a new id for a record it already reported", async () => {
+      const settled = { logged_at: "2026-09-05" };
+      const provider = fakeProvider({
+        readActivity: jest.fn(async () => [entry({ external_id: "first-id", ...settled })]),
+      });
+      await healthSync.run({ provider, hasWearableConsent: true, now: NOW });
+
+      // Same activity, same day — but the provider invented a fresh id, which
+      // is exactly what turns an overlap re-read into duplicated history.
+      const later = new Date(NOW.getTime() + 86_400_000);
+      const reminting = fakeProvider({
+        readActivity: jest.fn(async () => [entry({ external_id: "second-id", ...settled })]),
+      });
+      const outcome = await healthSync.run({
+        provider: reminting,
+        hasWearableConsent: true,
+        now: later,
+      });
+
+      expect(outcome).toMatchObject({ kind: "synced", unstableIds: true });
+    });
+
+    it("stays quiet when the same ids come back, as a correct provider's do", async () => {
+      const settled = { external_id: "stable-id", logged_at: "2026-09-05" };
+      const provider = fakeProvider({ readActivity: jest.fn(async () => [entry(settled)]) });
+
+      await healthSync.run({ provider, hasWearableConsent: true, now: NOW });
+      const outcome = await healthSync.run({
+        provider,
+        hasWearableConsent: true,
+        now: new Date(NOW.getTime() + 86_400_000),
+      });
+
+      expect(outcome).toMatchObject({ kind: "synced", unstableIds: false });
+    });
+
+    it("does not accuse a provider when the overlap window is simply empty", async () => {
+      // The user logged nothing on the covered days and went for a run today.
+      // Every id is new because every record is new — not a fault.
+      const provider = fakeProvider({
+        readActivity: jest.fn(async () => [entry({ external_id: "old", logged_at: "2026-09-05" })]),
+      });
+      await healthSync.run({ provider, hasWearableConsent: true, now: NOW });
+
+      const later = new Date(NOW.getTime() + 86_400_000);
+      const todayOnly = fakeProvider({
+        readActivity: jest.fn(async () => [
+          entry({ external_id: "brand-new", logged_at: later.toISOString().slice(0, 10) }),
+        ]),
+      });
+      const outcome = await healthSync.run({
+        provider: todayOnly,
+        hasWearableConsent: true,
+        now: later,
+      });
+
+      expect(outcome).toMatchObject({ kind: "synced", unstableIds: false });
+    });
+
+    it("says nothing on the first sync, having nothing to compare against", async () => {
+      const provider = fakeProvider({
+        readActivity: jest.fn(async () => [entry({ logged_at: "2026-09-01" })]),
+      });
+
+      const outcome = await healthSync.run({ provider, hasWearableConsent: true, now: NOW });
+
+      expect(outcome).toMatchObject({ kind: "synced", unstableIds: false });
+    });
+
+    it("skips the check rather than guessing when the remembered set was truncated", async () => {
+      // More ids than we keep: the set is partial, so a missing match proves
+      // nothing. A false accusation would be worse than no check.
+      const many = Array.from({ length: 600 }, (_, i) =>
+        entry({ external_id: `first-${i}`, logged_at: "2026-09-05" })
+      );
+      mockSync.mockResolvedValue({ source: "apple_health", received: 500, created: 500, updated: 0 });
+      await healthSync.run({
+        provider: fakeProvider({ readActivity: jest.fn(async () => many) }),
+        hasWearableConsent: true,
+        now: NOW,
+      });
+
+      const outcome = await healthSync.run({
+        provider: fakeProvider({
+          readActivity: jest.fn(async () => [
+            entry({ external_id: "totally-new", logged_at: "2026-09-05" }),
+          ]),
+        }),
+        hasWearableConsent: true,
+        now: new Date(NOW.getTime() + 86_400_000),
+      });
+
+      expect(outcome).toMatchObject({ kind: "synced", unstableIds: false });
+    });
+
+    it("forgets remembered ids along with the watermark", async () => {
+      const settled = { external_id: "stable-id", logged_at: "2026-09-05" };
+      const provider = fakeProvider({ readActivity: jest.fn(async () => [entry(settled)]) });
+      await healthSync.run({ provider, hasWearableConsent: true, now: NOW });
+
+      await healthSync.forget("apple_health");
+
+      // With the watermark gone this is a first sync again, so the check has
+      // nothing to compare against and must not fire.
+      const outcome = await healthSync.run({
+        provider: fakeProvider({
+          readActivity: jest.fn(async () => [entry({ external_id: "different", ...{ logged_at: "2026-09-05" } })]),
+        }),
+        hasWearableConsent: true,
+        now: new Date(NOW.getTime() + 86_400_000),
+      });
+
+      expect(outcome).toMatchObject({ kind: "synced", unstableIds: false });
+    });
   });
 });

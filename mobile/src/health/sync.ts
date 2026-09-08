@@ -11,6 +11,17 @@ import { ApiError } from "../api/client";
 import type { HealthProvider } from "./provider";
 
 const WATERMARK_KEY_PREFIX = "fitora.health.lastSync.v1";
+const SEEN_IDS_KEY_PREFIX = "fitora.health.seenIds.v1";
+
+/**
+ * How many of the last sync's ids to remember for the stability check below.
+ *
+ * Enough to cover any realistic overlap day. If a sync sends more than this,
+ * the remembered set is incomplete and the check is skipped rather than
+ * guessed at — a false accusation of a broken provider would be worse than
+ * no check.
+ */
+const SEEN_IDS_CAP = 500;
 
 /**
  * How far back the very first sync reaches.
@@ -43,8 +54,24 @@ export type HealthSyncOutcome =
       read: number;
       /** Records the server refused to be sent, because they were impossible. */
       dropped: number;
+      /**
+       * Records dropped because another record in the same read already used
+       * their `external_id`. A provider whose ids collide would otherwise
+       * have one activity silently overwrite another, server-side.
+       */
+      duplicateIds: number;
       created: number;
       updated: number;
+      /**
+       * The overlap re-read returned records from days the last sync already
+       * covered, and not one of them carried an id we sent before.
+       *
+       * That means the provider is minting a new id each time it is asked
+       * about the same record — the one contract `HealthProvider` cannot
+       * enforce (see `docs/health-integrations.md`). Left unnoticed it
+       * duplicates the user's history a little more on every sync.
+       */
+      unstableIds: boolean;
     }
   | { kind: "failed"; message: string; /** Pages that did land before the failure. */ partial: boolean };
 
@@ -56,12 +83,106 @@ function daysBefore(date: Date, days: number): Date {
   return new Date(date.getTime() - days * 24 * 60 * 60 * 1000);
 }
 
+function seenIdsKey(source: DeviceActivitySource): string {
+  return `${SEEN_IDS_KEY_PREFIX}.${source}`;
+}
+
+/** Ids sent by the previous sync, or null when there is nothing usable. */
+interface SeenIds {
+  ids: string[];
+  /** The last sync sent more than the cap, so `ids` is only part of it. */
+  truncated: boolean;
+}
+
+/**
+ * Drop records that reuse an `external_id` already used earlier in the same
+ * read.
+ *
+ * The server keys on `(user_id, source, external_id)`, so sending a collided
+ * pair means the second silently overwrites the first and the user loses an
+ * activity they really did. Keeping the first and reporting the rest turns a
+ * silent loss into a visible number.
+ */
+function dedupeById<T extends { external_id: string }>(
+  entries: T[]
+): { unique: T[]; duplicates: number } {
+  const seen = new Set<string>();
+  const unique: T[] = [];
+  for (const entry of entries) {
+    if (seen.has(entry.external_id)) continue;
+    seen.add(entry.external_id);
+    unique.push(entry);
+  }
+  return { unique, duplicates: entries.length - unique.length };
+}
+
+/**
+ * Whether the provider appears to be minting a fresh id for a record it has
+ * already reported.
+ *
+ * Only the days the previous sync definitely covered are examined — records
+ * dated strictly before the last sync ran. Those were seen before, so at
+ * least one of their ids should be familiar. Records from the sync day itself
+ * are excluded: an activity logged an hour after the last sync is genuinely
+ * new, and counting it would accuse a correct provider.
+ *
+ * Silent when there is nothing to compare against: the first sync, an
+ * overlap window the user left empty, or a remembered set that was truncated.
+ */
+function idsLookUnstable(
+  entries: { external_id: string; logged_at: string }[],
+  watermark: Date | null,
+  previous: SeenIds | null
+): boolean {
+  if (watermark === null || previous === null || previous.truncated) return false;
+  if (previous.ids.length === 0) return false;
+
+  // Both sides are ISO calendar dates, so a string comparison orders them.
+  const watermarkDate = watermark.toISOString().slice(0, 10);
+  const settled = entries.filter((entry) => entry.logged_at < watermarkDate);
+  if (settled.length === 0) return false;
+
+  const known = new Set(previous.ids);
+  return !settled.some((entry) => known.has(entry.external_id));
+}
+
 function chunk<T>(items: T[], size: number): T[][] {
   const pages: T[][] = [];
   for (let i = 0; i < items.length; i += size) {
     pages.push(items.slice(i, i + size));
   }
   return pages;
+}
+
+async function readSeenIds(source: DeviceActivitySource): Promise<SeenIds | null> {
+  try {
+    const raw = await AsyncStorage.getItem(seenIdsKey(source));
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !Array.isArray((parsed as SeenIds).ids)
+    ) {
+      return null;
+    }
+    return parsed as SeenIds;
+  } catch {
+    // A missing or corrupt set only costs the stability check, which is a
+    // diagnostic. Never let it break a sync.
+    return null;
+  }
+}
+
+async function writeSeenIds(
+  source: DeviceActivitySource,
+  ids: string[]
+): Promise<void> {
+  const payload: SeenIds = {
+    ids: ids.slice(0, SEEN_IDS_CAP),
+    truncated: ids.length > SEEN_IDS_CAP,
+  };
+  await AsyncStorage.setItem(seenIdsKey(source), JSON.stringify(payload));
 }
 
 export const healthSync = {
@@ -81,6 +202,7 @@ export const healthSync = {
   async forget(source: DeviceActivitySource): Promise<void> {
     try {
       await AsyncStorage.removeItem(watermarkKey(source));
+      await AsyncStorage.removeItem(seenIdsKey(source));
     } catch {
       // Nothing useful to do; the next sync simply re-reads more than it needs.
     }
@@ -120,6 +242,7 @@ export const healthSync = {
     }
 
     const watermark = await healthSync.lastSyncedAt(provider.source);
+    const previouslySent = await readSeenIds(provider.source);
     const since =
       watermark === null
         ? daysBefore(now, INITIAL_HISTORY_DAYS)
@@ -136,14 +259,24 @@ export const healthSync = {
       };
     }
 
-    const sendable = read.filter(isSyncableEntry);
-    const dropped = read.length - sendable.length;
+    const withinBounds = read.filter(isSyncableEntry);
+    const dropped = read.length - withinBounds.length;
+    const { unique: sendable, duplicates: duplicateIds } = dedupeById(withinBounds);
+    const unstableIds = idsLookUnstable(sendable, watermark, previouslySent);
 
     if (sendable.length === 0) {
       // Nothing to send is still a successful sync of this window: the
       // watermark moves so the next run doesn't re-read it forever.
       await AsyncStorage.setItem(watermarkKey(provider.source), now.toISOString());
-      return { kind: "synced", read: read.length, dropped, created: 0, updated: 0 };
+      return {
+        kind: "synced",
+        read: read.length,
+        dropped,
+        duplicateIds,
+        created: 0,
+        updated: 0,
+        unstableIds,
+      };
     }
 
     let created = 0;
@@ -167,11 +300,20 @@ export const healthSync = {
 
     try {
       await AsyncStorage.setItem(watermarkKey(provider.source), now.toISOString());
+      await writeSeenIds(provider.source, sendable.map((entry) => entry.external_id));
     } catch {
       // The data landed; only the bookmark didn't. The next sync re-reads a
       // wider window and the server dedups it.
     }
 
-    return { kind: "synced", read: read.length, dropped, created, updated };
+    return {
+      kind: "synced",
+      read: read.length,
+      dropped,
+      duplicateIds,
+      created,
+      updated,
+      unstableIds,
+    };
   },
 };

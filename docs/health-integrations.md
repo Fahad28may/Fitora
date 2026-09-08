@@ -51,6 +51,7 @@ is built and tested (`mobile/src/health/`, `mobile/src/api/activity.ts`):
 | Sync orchestration | `src/health/sync.ts` | Consent check, then OS permission, then a windowed read, then paging at the server's 500-entry cap. |
 | Client-side bounds | `src/api/activity.ts` | Mirrors the server's limits so one impossible record is dropped instead of 422-ing the batch it arrived in. The count of dropped records is shown, not swallowed. |
 | Honest unavailability | `src/ui/HealthSyncCard.tsx` | In a build with no native module, Settings says exactly that. There is no Connect button that does nothing. |
+| Id guards | `src/health/sync.ts` | Colliding ids within one read are dropped rather than allowed to overwrite each other server-side; ids that change between overlap re-reads are detected and reported as a fault in Fitora. See "The one constraint" below. |
 
 Two decisions worth knowing about:
 
@@ -98,27 +99,212 @@ Writing an unverifiable integration and calling it done would be worse than
 not writing it. Everything above that boundary is built because it *can* be
 tested — with a fake provider, in CI, today. The native read stops here.
 
-## What is needed to proceed
+## Runbook: landing the native read
 
-Roughly in order:
+Everything here is executable once the prerequisites below are met. Nothing in
+it has been run — no build of Fitora has ever included these modules — so
+treat the package APIs as a starting point and check them against each
+package's current documentation. What *is* settled is the contract: satisfy
+`HealthProvider` and the rest of the app already works.
 
-1. **A decision to leave Expo Go.** Everything after this depends on it.
-   Development moves to custom dev builds, which are slower to iterate on.
-   Nothing else in the app has to change for this: the work is one file
-   implementing `HealthProvider` and one `registerHealthProvider()` call.
-2. **Android first** — it is the cheaper path to a working integration.
-   - `react-native-health-connect` (community package)
-   - A physical Android device with the Health Connect app installed
-   - `READ_STEPS`, `READ_DISTANCE`, `READ_EXERCISE`, `READ_TOTAL_CALORIES_BURNED`
-     declared and requested at runtime
-3. **iOS**, once Android proves the shape:
-   - A paid Apple Developer account, and the HealthKit entitlement on the
-     provisioning profile
-   - `react-native-health` (community package)
-   - A physical iPhone; the Simulator is not sufficient
-   - `NSHealthShareUsageDescription` in the Info.plist, worded to say Fitora
-     reads activity and never writes back
-4. **A build pipeline** — EAS Build, or local Xcode/Gradle builds.
+### Prerequisites (yours, not the code's)
+
+| # | What | Why it can't be worked around |
+|---|---|---|
+| 1 | A decision to leave Expo Go | HealthKit and Health Connect are native modules. Expo Go ships a fixed set and cannot load them. After this, everyone developing Fitora uses a custom dev build. |
+| 2 | Android: a physical device with the Health Connect app | Health Connect is a separate system app, absent from most emulator images, and grants permissions through its own UI. |
+| 3 | iOS: a paid Apple Developer account (US$99/yr) and a physical iPhone | The HealthKit entitlement needs a provisioning profile, which needs a paid account. The Simulator does not serve real HealthKit data. |
+
+Do Android first. It costs nothing beyond a handset, and it proves the shape
+before the iOS money is spent.
+
+### Step 1 — leave Expo Go
+
+```bash
+cd mobile
+npx expo install expo-dev-client
+```
+
+Then build a development client instead of running in Expo Go: either EAS
+Build, or local `npx expo run:android` / `npx expo run:ios` with the platform
+toolchains installed. Update `mobile/README.md` in the same change — its
+current instructions say to use Expo Go, and they will stop working.
+
+### Step 2 — Android (Health Connect)
+
+```bash
+npx expo install react-native-health-connect
+```
+
+`app.json` gains the plugin and the read permissions. Four scopes, matching
+exactly what §15 and the privacy policy promise — steps, distance, workouts,
+active energy — and nothing else:
+
+```jsonc
+{
+  "expo": {
+    "plugins": [
+      // ...existing plugins...
+      ["react-native-health-connect"]
+    ],
+    "android": {
+      "permissions": [
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_DISTANCE",
+        "android.permission.health.READ_EXERCISE",
+        "android.permission.health.READ_ACTIVE_CALORIES_BURNED"
+      ]
+    }
+  }
+}
+```
+
+**`READ_ACTIVE_CALORIES_BURNED`, not `READ_TOTAL_CALORIES_BURNED`.** An
+earlier draft of this document said total. Active is the correct one: the
+privacy policy tells users Fitora reads "active energy", and total additionally
+includes basal metabolic burn, which Fitora neither needs nor promised to read.
+Requesting total would make the policy false.
+
+Health Connect also requires the app to answer the permissions-rationale
+intent (`androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE`) — Google rejects
+apps that don't handle it. Point it at a screen explaining the four scopes; the
+copy already in `HealthSyncCard` was written for exactly that job and can be
+reused rather than reworded.
+
+Sketch of the provider. Check the package's current API before relying on it:
+
+```ts
+// mobile/src/health/healthConnectProvider.ts
+import {
+  initialize, requestPermission, getGrantedPermissions, readRecords,
+} from "react-native-health-connect";
+
+export const healthConnectProvider: HealthProvider = {
+  source: "health_connect",
+  name: "Health Connect",
+  isAvailable: () => initialize(),
+  hasPermissions: async () => (await getGrantedPermissions()).length > 0,
+  requestPermissions: async () =>
+    (await requestPermission([
+      { accessType: "read", recordType: "Steps" },
+      { accessType: "read", recordType: "Distance" },
+      { accessType: "read", recordType: "ExerciseSession" },
+      { accessType: "read", recordType: "ActiveCaloriesBurned" },
+    ])).length > 0,
+  readActivity: async (since, until) => {
+    const filter = {
+      timeRangeFilter: {
+        operator: "between",
+        startTime: since.toISOString(),
+        endTime: until.toISOString(),
+      },
+    } as const;
+    const sessions = await readRecords("ExerciseSession", filter);
+    // metadata.id is Health Connect's own record id. That is the value that
+    // must become external_id — see "the one constraint" below.
+    return sessions.records.map(toDeviceActivityEntry);
+  },
+};
+```
+
+### Step 3 — iOS (HealthKit)
+
+```bash
+npx expo install react-native-health
+```
+
+`app.json` needs the entitlement and a usage string. iOS shows that string to
+the user, so it has to match what the app actually does:
+
+```jsonc
+{
+  "expo": {
+    "ios": {
+      "entitlements": { "com.apple.developer.healthkit": true },
+      "infoPlist": {
+        "NSHealthShareUsageDescription":
+          "Fitora reads your steps, distance, workouts and active energy so your activity appears alongside what you log. It only reads — Fitora never writes anything to Health."
+      }
+    }
+  }
+}
+```
+
+Do **not** add `NSHealthUpdateUsageDescription`. Fitora does not write to
+Health, `HealthProvider` has no write method, and asking for write access would
+contradict both the interface and the privacy policy.
+
+Read types: `StepCount`, `DistanceWalkingRunning`, `Workout`,
+`ActiveEnergyBurned`. HealthKit samples carry a `UUID` — that is the
+`external_id`.
+
+### Step 4 — register it
+
+One call at startup, guarded by platform:
+
+```ts
+// mobile/app/_layout.tsx, before the provider tree renders
+registerHealthProvider(
+  Platform.OS === "android" ? healthConnectProvider :
+  Platform.OS === "ios" ? healthKitProvider :
+  null
+);
+```
+
+Nothing else changes. `HealthSyncCard` stops saying the build can't read a
+health app and starts offering "Sync now" by itself, because it asks
+`getHealthProviderStatus()` rather than assuming an answer.
+
+### Step 5 — verify on real hardware
+
+CI cannot do any of this. Run it by hand, on a device, and don't mark §15 done
+until every line passes:
+
+| # | Check | Passing looks like |
+|---|---|---|
+| 1 | Fresh install; sync before granting the in-app consent | The system permission dialog never appears. This is the §30 ordering; a unit test already covers it, so this confirms the real build agrees. |
+| 2 | Grant `wearable_access`, then sync | The OS dialog appears listing four scopes and no others. |
+| 3 | Deny the OS dialog | "Your device didn't grant access", and nothing is written. |
+| 4 | Grant it, sync | Records appear under Home → Activity labelled "From Apple Health" / "From Health Connect", not "Typed by you". |
+| 5 | **Sync twice in a row** | The second sync reports 0 new and some updated. New records again means the ids are not stable — see below. |
+| 6 | Record a workout on a watch, sync, let the watch finalise it, sync again | The entry updates in place. The count does not grow. |
+| 7 | Withdraw `wearable_access`, sync | Refused — and the server returns 403 regardless of what the client does. |
+| 8 | Airplane mode, sync; restore network, sync | First reports a failure and promises a retry; the second lands everything, with no duplicates. |
+| 9 | Delete the account | Device activity goes with it (`DELETE /account` already covers this). |
+
+### Step 6 — fix the documents this makes wrong
+
+Landing the native read falsifies several statements. Correct them in the same
+change:
+
+- `privacy-policy.md` §4c — drop "The data does not leave your device unaided",
+  which is true only because no build can read a device.
+- `third-party-services.md` — the Apple Health / Health Connect row's status.
+- `production-readiness.md` — "HealthKit / Health Connect (device read)" leaves
+  **Not started**; "Device record ids" can only leave NEEDS REVIEW once check 5
+  above passes on hardware.
+- `roadmap.md` — Phase 4's last ◐ becomes ✅.
+- `mobile/README.md` — Expo Go is no longer how you run the app.
+
+## The one constraint, and what now guards it
+
+`external_id` must be the device's own record id. The interface cannot force
+that: any implementation can return a string, and a wrong string produces
+duplicated history rather than an error. Three ways to get it wrong, and where
+each is caught:
+
+| Failure | Caught by | What happens |
+|---|---|---|
+| Two records in one read share an id | `dedupeById` in `src/health/sync.ts` | The later one is dropped instead of silently overwriting the earlier one server-side, and the count surfaces as "N skipped as repeated". |
+| A new id is minted for a record already reported | `idsLookUnstable` in `src/health/sync.ts` | The overlap re-read is checked against the ids the last sync sent. If days the last sync definitely covered come back with no familiar id at all, the user is told it is a fault in Fitora, not in their device. |
+| An id that is stable but not the device's | **Nothing** | Undetectable from here — a provider hashing its own fields looks identical to a correct one until the device revises a record and the hash moves. Check 5 and 6 in Step 5 are the only defence. |
+
+The stability check deliberately stays quiet rather than guessing: on a first
+sync, when the overlap window is genuinely empty, and when the remembered id
+set was truncated by its 500-entry cap. A false accusation of a broken provider
+would be worse than no check. It reports rather than blocks, because the
+records themselves are real and refusing to sync them would livelock a user
+whose health app had simply been cleared.
 
 ## Design constraints for whoever builds it
 
@@ -133,12 +319,12 @@ by satisfying the interface:
   and explain why *before* requesting it. Steps, distance, workouts and active
   energy. Not sleep, not heart rate, not clinical records — none of which
   Fitora uses.
-- **The device's record id becomes `external_id`.** Not enforceable above the
-  seam — this is the one constraint an implementation can still get wrong, and
-  getting it wrong produces duplicates rather than an error. HealthKit's `UUID`,
-  Health Connect's record id. Do not synthesise one from a timestamp: it will
-  change when the device revises a record, and the dedup will fail open into
-  duplicates.
+- **The device's record id becomes `external_id`.** ◐ The one constraint the
+  interface cannot enforce, though two of its three failure modes are now
+  detected — see "The one constraint, and what now guards it" above.
+  HealthKit's sample `UUID`, Health Connect's `metadata.id`. Do not synthesise
+  one from a timestamp or a loop index: it will change when the device revises
+  a record, and the server's dedup will fail open into duplicates.
 - **Two consents, not one.** ✅ Enforced and tested in `src/health/sync.ts`:
   without `wearable_access` the OS is never asked. The OS permission is the
   device agreeing to hand data over. `wearable_access` is the user agreeing Fitora may store it. Ask

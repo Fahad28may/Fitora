@@ -40,7 +40,17 @@ function outcomeMessage(outcome: HealthSyncOutcome): string {
         // user is entitled to see, not something to quietly swallow.
         parts.push(`${outcome.dropped} skipped as out of range`);
       }
-      return `Synced — ${parts.join(", ")}.`;
+      if (outcome.duplicateIds > 0) {
+        parts.push(`${outcome.duplicateIds} skipped as repeated`);
+      }
+      const summary = `Synced — ${parts.join(", ")}.`;
+      // The one contract the provider interface can't enforce. Said in full
+      // rather than as a count, because it means the history is being
+      // duplicated and the cause is a bug in the app, not in the user's
+      // device or their data.
+      return outcome.unstableIds
+        ? `${summary} Your health app is reporting the same activities under new ids each time, which duplicates them here. This is a fault in Fitora — please report it, and turn the sync off until it's fixed.`
+        : summary;
     }
   }
 }
