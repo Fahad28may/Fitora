@@ -198,6 +198,14 @@ export default function HomeScreen(): React.JSX.Element {
                 ) : null}
               </>
             )}
+            <Pressable
+              style={screenStyles.secondaryButton}
+              onPress={() => router.push("/log-activity")}
+              accessibilityRole="button"
+              accessibilityLabel="Log activity"
+            >
+              <Text style={screenStyles.secondaryButtonText}>Log activity</Text>
+            </Pressable>
           </View>
 
           <View style={screenStyles.card}>

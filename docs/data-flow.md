@@ -16,6 +16,9 @@ For every piece of personal data collected: **why do we need this?** If there's 
 | Progress photos (optional) | User-tracked visual progress | Object storage, private bucket, encrypted at rest | Until user deletes or account deletion | Backend only, never AI providers | None |
 | Weight / measurements | Progress tracking | PostgreSQL | Until account deletion or user delete | Backend | None |
 | Workout data | Workout tracking | PostgreSQL | Until account deletion or user delete | Backend | None |
+| Activity entries (typed) | Activity tracking | PostgreSQL | Until account deletion or user delete | Backend | None |
+| Activity entries (device-reported: steps, distance, workouts, active energy) | Activity tracking from Apple Health / Health Connect / a wearable | PostgreSQL, tagged with the reporting source and the device's own record id | Until account deletion or user delete | Backend | None — never sent to the AI provider or any other processor |
+| Health-sync watermark (when this device last synced) | Avoids re-reading a device's whole history on every sync | On the device only (AsyncStorage), never uploaded | Until the app is uninstalled or the source is disconnected | The app on that device | None |
 | AI conversation history | AI coach context | PostgreSQL | Until account deletion or user delete; see retention note in `privacy-policy.md` | Backend, AI provider (per-message, minimum necessary) | AI provider |
 | Consent records | Legal/audit requirement | PostgreSQL, append-only | Retained per legal requirement even after account deletion (anonymized) | Backend | None |
 | Refresh token hashes | Session management | PostgreSQL | Until expiry/revocation | Backend | None |
@@ -26,6 +29,8 @@ For every piece of personal data collected: **why do we need this?** If there's 
 - The AI layer never receives: email, full name, password, auth tokens, payment information. See `ai-safety.md` for exactly what each AI call does receive.
 - Analytics (if/when added) never receive raw health data (weights, food logs, workout details) without a specific, documented, lawful reason — see §34 of the master prompt.
 - Images are processed for their required signal (food recognition, progress comparison) and not retained by default; if retained, they are encrypted and user-deletable.
+- Device health data is read, never written: Fitora requests read scopes only, and only for steps, distance, workouts and active energy. Sleep, heart rate and clinical records are not requested because no feature uses them.
+- Reading a device requires two separate agreements, in this order: the in-app `wearable_access` consent, then the OS permission. Asking the OS first would put the user's answer on record before Fitora had the right to keep anything they agreed to.
 
 ## Account deletion flow
 

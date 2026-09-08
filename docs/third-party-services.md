@@ -10,6 +10,7 @@ Most third-party providers haven't been selected/integrated yet — this table i
 | Email provider | Verification, password reset | Email address, transactional content only | Provider policy | Core if email auth is used | Not yet selected |
 | Analytics (if added) | Product analytics | Minimal telemetry, never raw health data by default | Provider policy | Optional | Not yet added |
 | Hosting / database host | Application + DB hosting | All application data (encrypted at rest) | Per hosting/backup policy | Core | Not yet selected |
+| Apple Health / Android Health Connect | Activity source (steps, distance, workouts, active energy) | **Nothing is shared with them.** Data flows one way — Fitora reads, and requests no write scopes. They are a source, not a processor, and there is no account, credential or network call to a vendor involved: the data is already on the user's own device | N/A — Fitora stores what it reads under the user's account and deletes it with the account | Optional — off unless the user grants both the in-app `wearable_access` consent and the OS permission | **Client layer built; native read not shipped.** No build of Fitora can currently read either. See `health-integrations.md` |
 
 ## Process for adding a provider
 

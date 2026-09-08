@@ -19,6 +19,7 @@ import { ApiError } from "../src/api/client";
 import type { ConsentState, ConsentType } from "../src/api/types";
 import { useAuth } from "../src/auth/AuthContext";
 import { formStyles as s } from "../src/ui/formStyles";
+import { HealthSyncCard } from "../src/ui/HealthSyncCard";
 import { screenStyles } from "./(tabs)/styles";
 
 /**
@@ -39,7 +40,8 @@ const CONSENT_COPY: Record<ConsentType, { label: string; description: string }> 
   },
   wearable_access: {
     label: "Read data from wearables",
-    description: "Not built yet — no data is read from any device today.",
+    description:
+      "Lets Fitora store activity from Apple Health or Health Connect. Reading from a device also needs your phone's permission — this switch is you allowing Fitora to keep what it reads.",
   },
   analytics: {
     label: "Optional product analytics",
@@ -210,6 +212,11 @@ export default function SettingsScreen(): React.JSX.Element {
         )}
         {consentError ? <Text style={s.error}>{consentError}</Text> : null}
       </View>
+
+      {/* --- device activity --- */}
+      <HealthSyncCard
+        hasWearableConsent={consentState?.consents.wearable_access ?? false}
+      />
 
       {/* --- export --- */}
       <View style={[s.card, { gap: 10, marginTop: 16 }]}>

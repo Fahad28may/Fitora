@@ -100,7 +100,18 @@ describe("Settings → Privacy", () => {
     const view = await render(<SettingsScreen />);
 
     await waitFor(() => expect(view.getByText(/Fitora collects no analytics today/)).toBeTruthy());
-    expect(view.getByText(/no data is read from any device today/)).toBeTruthy();
+  });
+
+  it("does not offer a device sync this build cannot perform", async () => {
+    // The wearable consent switch is real and the server accepts device
+    // activity, but no build shipped so far can read a health app. Saying so
+    // beats a Connect button that quietly does nothing.
+    const view = await render(<SettingsScreen />);
+
+    await waitFor(() =>
+      expect(view.getByText(/can't read Apple Health or Health Connect/i)).toBeTruthy()
+    );
+    expect(view.queryByText("Sync now")).toBeNull();
   });
 
   it("exports data when asked", async () => {

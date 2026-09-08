@@ -12,7 +12,7 @@ See [`data-flow.md`](data-flow.md) for the authoritative, kept-current data inve
 
 - Account data: email, password (hashed — we never see or store your plaintext password).
 - Profile data you provide: age, height, sex, activity level, goals — used only to calculate calorie/macro estimates.
-- Data you log: food diary entries, workouts, weight, measurements, water intake, and — if you choose — progress photos.
+- Data you log: food diary entries, workouts, weight, measurements, water intake, activity, and — if you choose — progress photos.
 - Optional content: natural-language food descriptions and food photos, used to help log food.
 - Technical data: session/device information needed for authentication and security (see `data-flow.md`).
 
@@ -37,6 +37,18 @@ If you use photo food recognition, the photo you choose is uploaded, sent to the
 The result is an estimate, and always a range rather than an exact number. Nothing is added to your diary until you pick a food and confirm it.
 
 Photo recognition is optional and off unless the server operator has configured a vision model. Progress photos are a separate feature with different handling — those *are* stored, in a private bucket, until you delete them (see §2).
+
+## 4c. Activity from your phone or watch
+
+Fitora can store activity — steps, distance, workouts, active energy — that a health app on your device reports to it. What that involves:
+
+- **It is off unless you turn it on twice.** Once in Fitora ("Read data from wearables", in Settings → Privacy), which is you allowing us to store the data, and once in your phone's own permission dialog, which is your device agreeing to hand it over. We ask for ours first, so nobody meets a system prompt before reading what it is for. Turning the Fitora switch off stops future syncs immediately.
+- **We read, we never write.** Fitora does not add anything to Apple Health or Health Connect, and does not ask for permission to.
+- **Only four kinds of data.** Steps, distance, workouts and active energy. Not sleep, not heart rate, not clinical records — Fitora has no feature that uses them, so it does not ask for them.
+- **It stays with us.** Device activity is stored in your account and is never sent to the AI provider, the food database, or anyone else. It is included in your data export and deleted with your account.
+- **The data does not leave your device unaided.** Reading a health app requires a build of Fitora that includes the necessary components. If your build does not have them, Settings says so plainly and no activity is read from any device.
+
+Activity you type in yourself is ordinary logged data and always has been; entries record whether they were typed or reported by a device, and the app shows which is which.
 
 ## 5. Third-party providers
 

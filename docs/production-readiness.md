@@ -59,13 +59,16 @@ Status values: `PASS`, `FAIL`, `NEEDS REVIEW`. This checklist existing does **no
 | Item | Status | Notes |
 |---|---|---|
 | Device activity ingestion (server) | PASS | `POST /activity-entries/sync` — consent-gated, idempotent by device record id, bounds-checked like manual entry, provenance-preserving. Covered by `tests/test_activity_sync.py` |
-| HealthKit / Health Connect (device) | **Not started** | Requires leaving Expo Go for custom dev builds, a paid Apple Developer account for iOS, and physical devices. Cannot be verified in CI. See `health-integrations.md` |
+| Device sync orchestration (client) | PASS | `mobile/src/health/` — app-level consent is checked before the OS is ever asked (the §30 ordering, asserted by test), a 30-day first window with a 1-day overlap re-read, paging at the server's 500-entry cap, and client-side bounds filtering so one impossible record is dropped instead of 422-ing the batch around it. A failed page leaves the watermark unmoved so the window retries. 24 tests against a fake provider |
+| Honest unavailability in the UI | PASS | With no native module registered, Settings says so in plain language and shows no Sync button. Asserted by `src/ui/__tests__/HealthSyncCard.test.tsx` and `app/__tests__/settings.test.tsx` |
+| HealthKit / Health Connect (device read) | **Not started** | The one remaining piece: a `HealthProvider` implementation. Requires leaving Expo Go for custom dev builds, a paid Apple Developer account for iOS, and physical devices. Cannot be verified in CI. See `health-integrations.md` |
+| Device record ids (`external_id`) | NEEDS REVIEW | Dedup correctness depends on the native implementation using HealthKit's UUID / Health Connect's record id rather than synthesising one. This is the single constraint the interface cannot enforce, and getting it wrong yields duplicates rather than an error — verify against a real device when the native read lands |
 
 ## Resilience
 | Item | Status | Notes |
 |---|---|---|
 | Duplicate-safe retries | PASS | Optional `Idempotency-Key` on `POST /food-diary`, `/water-entries`, `/weight-entries`, `/activity-entries`; keys scoped per user, reuse across endpoints is a 409. Covered by `tests/test_idempotency.py` |
-| Offline logging | NEEDS REVIEW | Client outbox persists queued writes and replays them with their original key (`src/api/outbox.ts`, 13 tests). Only water quick-add currently routes through it |
+| Offline logging | NEEDS REVIEW | Client outbox persists queued writes and replays them with their original key (`src/api/outbox.ts`, 13 tests). Water quick-add and activity logging route through it; the remaining logging screens do not |
 | Idempotency key retention | NEEDS REVIEW | Keys are stored indefinitely and deleted with the account. A pruning job for keys older than the retry window is not yet written |
 
 ## Accessibility
@@ -78,8 +81,8 @@ Status values: `PASS`, `FAIL`, `NEEDS REVIEW`. This checklist existing does **no
 ## Testing
 | Item | Status | Notes |
 |---|---|---|
-| Backend (unit, integration, API, authz, authn, DB) | PASS | 227 tests, run in CI |
-| Frontend (component, screen, navigation, form validation) | NEEDS REVIEW | 35 tests covering the API client, BarcodeScanner, Settings → Privacy, and register-form validation, run in CI. Coverage is real but narrow — most screens are still untested |
+| Backend (unit, integration, API, authz, authn, DB) | PASS | 336 tests, run in CI |
+| Frontend (component, screen, navigation, form validation) | NEEDS REVIEW | 116 tests covering the API client, the health-sync layer, BarcodeScanner, HealthSyncCard, Settings → Privacy, Log activity, and register-form validation, run in CI. Broader than it was, still narrow — the Nutrition, Workout, Progress and Coach screens remain untested |
 | Security (unauthorized access, IDOR, tokens, rate limits, uploads, injection) | NEEDS REVIEW | Covered by `tests/test_security.py`, per-feature ownership tests, `test_progress_photos.py`, and `test_security_headers.py`. No external pen-test |
 | AI (injection, unsafe health questions, malformed output, tool authorization) | NEEDS REVIEW | Architectural tests in place and one live adversarial session against the real model; not a systematic red-team |
 
