@@ -17,12 +17,18 @@ from app.services.food_db.exceptions import (
     ProductNotFoundError,
     UnusableProductDataError,
 )
+from app.services.food_db.food_search_service import FoodSearchService
 
 router = APIRouter(prefix="/foods", tags=["nutrition"])
 
 MAX_PAGE_SIZE = 50
 DEFAULT_PAGE_SIZE = 20
 MIN_SEARCH_LENGTH = 2
+
+_EXTERNAL_SEARCH_DISABLED_DETAIL = (
+    "Searching an external food database is not configured on this server. "
+    "Local and custom foods still work - see docs/third-party-services.md."
+)
 
 _FOOD_DB_DISABLED_DETAIL = (
     "Barcode lookup is not configured on this server. Food search and manual "
@@ -58,16 +64,46 @@ def _to_food_out(food: Food, nutrition: FoodNutrition) -> FoodOut:
 
 
 @router.get("/search", response_model=list[FoodOut])
+@limiter.limit(barcode_rate_limit)
 async def search_foods(
+    request: Request,
     q: str = Query(min_length=MIN_SEARCH_LENGTH, max_length=200),
     limit: int = Query(default=DEFAULT_PAGE_SIZE, gt=0, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
+    include_external: bool = Query(default=False),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    client: FoodDbClient | None = Depends(get_food_db_client),
 ) -> list[FoodOut]:
-    results = await FoodRepository(db).search(
-        user_id=current_user.id, query=q, limit=limit, offset=offset
-    )
+    """Search foods, optionally extending the search to an external database.
+
+    `include_external` defaults to false and must be asked for explicitly:
+    unlike a barcode, the query is free text the user typed, so sending it to
+    a third party is a disclosure the user should be making deliberately. The
+    client is expected to present it that way rather than switching it on
+    silently.
+    """
+    if include_external and client is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=_EXTERNAL_SEARCH_DISABLED_DETAIL,
+        )
+
+    service = FoodSearchService(db, client)
+    try:
+        results = await service.search(
+            user_id=current_user.id,
+            query=q,
+            limit=limit,
+            offset=offset,
+            include_external=include_external,
+        )
+    except FoodDbProviderError:
+        # Local results are the core feature and the provider is an extra, so
+        # an outage degrades the search rather than failing it (§51).
+        results = await FoodRepository(db).search(
+            user_id=current_user.id, query=q, limit=limit, offset=offset
+        )
     return [_to_food_out(food, nutrition) for food, nutrition in results]
 
 

@@ -4,12 +4,18 @@ from app.services.food_db.exceptions import FoodDbError
 
 class FakeFoodDbClient:
     """Deterministic stand-in for the food database — the real provider isn't
-    called in tests. Records every barcode it was asked for, so tests can
-    assert that a cached lookup made no outbound request."""
+    called in tests. Records every barcode and search term it was asked for, so
+    tests can assert that a cached lookup made no outbound request."""
 
-    def __init__(self, products: dict[str, ExternalProduct]) -> None:
+    def __init__(
+        self,
+        products: dict[str, ExternalProduct],
+        search_results: list[ExternalProduct] | None = None,
+    ) -> None:
         self._products = products
+        self._search_results = search_results or []
         self.calls: list[str] = []
+        self.searches: list[str] = []
 
     async def fetch_by_barcode(self, barcode: str) -> ExternalProduct:
         self.calls.append(barcode)
@@ -20,6 +26,10 @@ class FakeFoodDbClient:
             raise ProductNotFoundError(barcode)
         return product
 
+    async def search_by_name(self, query: str, *, limit: int) -> list[ExternalProduct]:
+        self.searches.append(query)
+        return self._search_results[:limit]
+
 
 class RaisingFoodDbClient:
     """Always fails with the given exception — for provider-outage and
@@ -28,9 +38,14 @@ class RaisingFoodDbClient:
     def __init__(self, error: FoodDbError) -> None:
         self._error = error
         self.calls: list[str] = []
+        self.searches: list[str] = []
 
     async def fetch_by_barcode(self, barcode: str) -> ExternalProduct:
         self.calls.append(barcode)
+        raise self._error
+
+    async def search_by_name(self, query: str, *, limit: int) -> list[ExternalProduct]:
+        self.searches.append(query)
         raise self._error
 
 

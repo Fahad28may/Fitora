@@ -39,6 +39,13 @@ MAX_SERVING_DESCRIPTION_LENGTH = 120
 # back to the 100 g basis the nutrition is already expressed in.
 DEFAULT_SERVING_DESCRIPTION = "100 g"
 
+# Search-term bounds. The lower bound keeps a stray keystroke from becoming an
+# outbound request for "a"; the upper one bounds what can be sent to a third
+# party in one go.
+MIN_SEARCH_TERM_LENGTH = 2
+MAX_SEARCH_TERM_LENGTH = 100
+MAX_SEARCH_RESULTS = 20
+
 
 @dataclass(frozen=True)
 class ExternalProduct:
@@ -60,6 +67,8 @@ class ExternalProduct:
 
 class FoodDbClient(Protocol):
     async def fetch_by_barcode(self, barcode: str) -> ExternalProduct: ...
+
+    async def search_by_name(self, query: str, *, limit: int) -> list[ExternalProduct]: ...
 
 
 def _coerce_number(value: object) -> float | None:
@@ -159,13 +168,46 @@ def parse_openfoodfacts_product(
     )
 
 
+def parse_openfoodfacts_search(
+    body: dict[str, object], *, limit: int
+) -> list[ExternalProduct]:
+    """Validate a search response into products worth showing.
+
+    Skip-don't-fail: one contributor's typo in the twelfth result must not
+    empty the whole list, so unusable entries are dropped individually. A
+    result without a barcode is dropped too — the barcode is what lets the
+    local cache recognise the product again, and without one every search
+    would re-import a duplicate row.
+    """
+    raw_products = body.get("products")
+    if not isinstance(raw_products, list):
+        raise FoodDbProviderError("food database returned an unexpected shape")
+
+    found: list[ExternalProduct] = []
+    seen: set[str] = set()
+    for entry in raw_products:
+        if len(found) >= limit:
+            break
+        if not isinstance(entry, dict):
+            continue
+        code = entry.get("code")
+        if not isinstance(code, str) or not BARCODE_PATTERN.match(code) or code in seen:
+            continue
+        try:
+            found.append(parse_openfoodfacts_product(code, entry))
+        except UnusableProductDataError:
+            continue
+        seen.add(code)
+    return found
+
+
 class OpenFoodFactsClient:
     """Open Food Facts (https://world.openfoodfacts.org) -- free, open data, no
     account or API key. Their terms ask API users to send a descriptive
     User-Agent so they can identify traffic, which `user_agent` supplies.
 
-    Only the barcode is sent. No user identifier, no auth header, nothing about
-    who is scanning."""
+    Only the barcode (or, for a search, the search term) is sent. No user
+    identifier, no auth header, nothing about who is asking."""
 
     # Requesting only the fields we use keeps the response small; a full Open
     # Food Facts product document is hundreds of keys.
@@ -176,11 +218,7 @@ class OpenFoodFactsClient:
         self._timeout = timeout
         self._user_agent = user_agent
 
-    async def fetch_by_barcode(self, barcode: str) -> ExternalProduct:
-        if not BARCODE_PATTERN.match(barcode):
-            raise ProductNotFoundError("not a valid barcode")
-
-        url = f"{self._base_url}/api/v2/product/{barcode}.json"
+    async def _get_json(self, url: str, params: dict[str, str | int]) -> dict[str, object]:
         headers = {"User-Agent": self._user_agent, "Accept": "application/json"}
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
@@ -188,7 +226,7 @@ class OpenFoodFactsClient:
                 # bounds the gap between chunks, so a slowly-trickling response
                 # can outlive it indefinitely. wait_for is the wall-clock cap.
                 response = await asyncio.wait_for(
-                    client.get(url, headers=headers, params={"fields": self._FIELDS}),
+                    client.get(url, headers=headers, params=params),
                     timeout=self._timeout,
                 )
         except (httpx.TimeoutException, TimeoutError) as exc:
@@ -197,7 +235,7 @@ class OpenFoodFactsClient:
             raise FoodDbProviderError("food database request failed") from exc
 
         if response.status_code == 404:
-            raise ProductNotFoundError(barcode)
+            raise ProductNotFoundError("not found")
         if response.status_code >= 400:
             raise FoodDbProviderError(f"food database returned {response.status_code}")
 
@@ -207,6 +245,14 @@ class OpenFoodFactsClient:
             raise FoodDbProviderError("food database returned invalid JSON") from exc
         if not isinstance(body, dict):
             raise FoodDbProviderError("food database returned an unexpected shape")
+        return body
+
+    async def fetch_by_barcode(self, barcode: str) -> ExternalProduct:
+        if not BARCODE_PATTERN.match(barcode):
+            raise ProductNotFoundError("not a valid barcode")
+
+        url = f"{self._base_url}/api/v2/product/{barcode}.json"
+        body = await self._get_json(url, {"fields": self._FIELDS})
 
         # v2 answers a miss with 404, but the older v0-style body (status: 0)
         # still shows up behind caches and mirrors.
@@ -219,11 +265,50 @@ class OpenFoodFactsClient:
 
         return parse_openfoodfacts_product(barcode, product)
 
+    async def search_by_name(self, query: str, *, limit: int) -> list[ExternalProduct]:
+        """Free-text product search.
+
+        Unlike a barcode lookup, this sends something the user typed to a third
+        party, so it is opt-in at the API boundary as well as by configuration.
+        Products whose nutrition data is missing or implausible are dropped
+        rather than surfaced: a search result is a candidate for logging, and
+        the same crowd-sourced typos that make a barcode import unsafe make a
+        search hit unsafe.
+        """
+        term = " ".join(query.split())
+        if len(term) < MIN_SEARCH_TERM_LENGTH:
+            return []
+        term = term[:MAX_SEARCH_TERM_LENGTH]
+
+        url = f"{self._base_url}/cgi/search.pl"
+        try:
+            body = await self._get_json(
+                url,
+                {
+                    "search_terms": term,
+                    "search_simple": 1,
+                    "action": "process",
+                    "json": 1,
+                    "page_size": min(limit, MAX_SEARCH_RESULTS),
+                    "fields": f"code,{self._FIELDS}",
+                },
+            )
+        except ProductNotFoundError:
+            # `_get_json` maps 404 to a miss, which is the right reading for a
+            # product lookup. For a search it just means no matches, and an
+            # empty result set is a normal answer rather than an error.
+            return []
+        return parse_openfoodfacts_search(body, limit=limit)
+
 
 __all__ = [
     "BARCODE_PATTERN",
+    "MAX_SEARCH_RESULTS",
+    "MAX_SEARCH_TERM_LENGTH",
+    "MIN_SEARCH_TERM_LENGTH",
     "ExternalProduct",
     "FoodDbClient",
     "OpenFoodFactsClient",
     "parse_openfoodfacts_product",
+    "parse_openfoodfacts_search",
 ]

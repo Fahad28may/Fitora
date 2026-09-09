@@ -38,6 +38,9 @@ export default function NutritionScreen(): React.JSX.Element {
   const [results, setResults] = useState<FoodOut[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  // Whether the last search reached the external provider. Reset on every new
+  // search so opting in once never becomes the silent default.
+  const [searchedExternally, setSearchedExternally] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -125,7 +128,7 @@ export default function NutritionScreen(): React.JSX.Element {
     void loadDiary();
   }, [loadDiary]);
 
-  async function handleSearch(): Promise<void> {
+  async function handleSearch(includeExternal = false): Promise<void> {
     if (query.trim().length < 2) {
       setSearchError("Enter at least 2 characters.");
       return;
@@ -133,11 +136,18 @@ export default function NutritionScreen(): React.JSX.Element {
     setSearchError(null);
     setShowCreateForm(false);
     setIsSearching(true);
+    setSearchedExternally(includeExternal);
     try {
-      setResults(await foodsApi.search(query.trim()));
+      setResults(await foodsApi.search(query.trim(), { includeExternal }));
       setHasSearched(true);
     } catch (err) {
-      setSearchError(err instanceof ApiError ? err.message : "Search failed.");
+      if (err instanceof ApiError && err.status === 503) {
+        setSearchError(
+          "This server isn't set up to search an external food database — try a custom food.",
+        );
+      } else {
+        setSearchError(err instanceof ApiError ? err.message : "Search failed.");
+      }
     } finally {
       setIsSearching(false);
     }
@@ -578,8 +588,33 @@ export default function NutritionScreen(): React.JSX.Element {
               <Text style={screenStyles.body}>
                 {food.serving_description} — {food.calories_kcal} kcal
               </Text>
+              {/* Same caveat the scanner shows: these numbers are contributed
+                  by the public, not read off the package by us. */}
+              {food.source === "external_db" ? (
+                <Text style={s.helpText}>
+                  From a crowd-sourced database — worth a glance against the label
+                </Text>
+              ) : null}
             </TouchableOpacity>
           ))}
+
+          {hasSearched && !isSearching && !searchedExternally ? (
+            <View style={{ gap: 4 }}>
+              <TouchableOpacity
+                onPress={() => void handleSearch(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Also search the online food database"
+              >
+                <Text style={s.secondaryButtonText}>Also search the online food database</Text>
+              </TouchableOpacity>
+              {/* Stated before the tap, not after: this is the moment the
+                  user's typing would leave the server. */}
+              <Text style={s.helpText}>
+                This sends what you typed to Open Food Facts. Nothing identifying you is
+                sent with it.
+              </Text>
+            </View>
+          ) : null}
 
           {hasSearched && !isSearching && results.length === 0 && !showCreateForm ? (
             <TouchableOpacity
