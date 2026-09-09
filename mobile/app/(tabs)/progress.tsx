@@ -1,3 +1,4 @@
+import { router } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Text, TextInput, TouchableOpacity, View } from "react-native";
 
@@ -104,6 +105,15 @@ export default function ProgressScreen(): React.JSX.Element {
               {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>Log</Text>}
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            style={screenStyles.secondaryButton}
+            onPress={() => router.push("/analytics")}
+            accessibilityRole="button"
+            accessibilityLabel="View detailed analytics"
+          >
+            <Text style={screenStyles.secondaryButtonText}>View detailed analytics</Text>
+          </TouchableOpacity>
 
           {error ? <Text style={s.error}>{error}</Text> : null}
           {isLoading ? <ActivityIndicator /> : null}
