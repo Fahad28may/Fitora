@@ -30,6 +30,23 @@ _EXTERNAL_SEARCH_DISABLED_DETAIL = (
     "Local and custom foods still work - see docs/third-party-services.md."
 )
 
+# Values FastAPI parses as false, plus the absent case. Anything else is
+# treated as an opt-in and therefore rate-limited: an unrecognised value must
+# fail toward the limit, not out of it.
+_FALSY_QUERY_VALUES = frozenset({"", "false", "0", "no", "off", "n", "f"})
+
+
+def _is_local_only_search(request: Request) -> bool:
+    """Whether this search will stay on the server.
+
+    The limit below exists to bound outbound requests to the food provider, so
+    a purely local search must not spend that budget — the bucket is per-IP,
+    and everyone behind one NAT shares it.
+    """
+    raw = request.query_params.get("include_external")
+    return raw is None or raw.strip().lower() in _FALSY_QUERY_VALUES
+
+
 _FOOD_DB_DISABLED_DETAIL = (
     "Barcode lookup is not configured on this server. Food search and manual "
     "entry work without it — see docs/third-party-services.md."
@@ -64,7 +81,7 @@ def _to_food_out(food: Food, nutrition: FoodNutrition) -> FoodOut:
 
 
 @router.get("/search", response_model=list[FoodOut])
-@limiter.limit(barcode_rate_limit)
+@limiter.limit(barcode_rate_limit, exempt_when=_is_local_only_search)
 async def search_foods(
     request: Request,
     q: str = Query(min_length=MIN_SEARCH_LENGTH, max_length=200),

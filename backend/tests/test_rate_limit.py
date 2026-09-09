@@ -176,3 +176,65 @@ async def test_the_health_endpoint_is_exempt_from_rate_limiting() -> None:
         statuses = [(await ac.get("/health")).status_code for _ in range(30)]
 
     assert set(statuses) == {200}, f"health should never be limited, got {set(statuses)}"
+
+
+async def test_only_an_external_food_search_spends_the_provider_budget() -> None:
+    """The food-search limit exists to bound outbound requests to the food
+    provider. A local-only search makes none, and the bucket is per-IP — so
+    letting local searches consume it would throttle everyone behind one NAT
+    for traffic that never left the server.
+
+    Exercises the real `exempt_when` predicate against a minimal app so the
+    limit is deterministic and isolated from other tests' request volume.
+    """
+    from app.api.v1.foods import _is_local_only_search
+
+    limiter = Limiter(key_func=get_remote_address)
+    app = FastAPI()
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    @app.get("/search")
+    @limiter.limit("2/minute", exempt_when=_is_local_only_search)
+    async def search_endpoint(request: Request) -> dict[str, bool]:
+        return {"ok": True}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
+        local = [(await ac.get("/search", params={"q": "oat"})).status_code for _ in range(5)]
+        explicit_false = (
+            await ac.get("/search", params={"q": "oat", "include_external": "false"})
+        ).status_code
+        external = [
+            (await ac.get("/search", params={"q": "oat", "include_external": "true"})).status_code
+            for _ in range(4)
+        ]
+
+    assert local == [200] * 5
+    assert explicit_false == 200
+    assert external[:2] == [200, 200]
+    assert 429 in external[2:], f"an external search must be capped, got {external}"
+
+
+async def test_an_unrecognised_opt_in_value_fails_toward_the_limit() -> None:
+    from app.api.v1.foods import _is_local_only_search
+
+    limiter = Limiter(key_func=get_remote_address)
+    app = FastAPI()
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    @app.get("/search")
+    @limiter.limit("1/minute", exempt_when=_is_local_only_search)
+    async def search_endpoint(request: Request) -> dict[str, bool]:
+        return {"ok": True}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
+        # Not a value FastAPI parses as false, so it must not buy an exemption.
+        statuses = [
+            (await ac.get("/search", params={"include_external": "maybe"})).status_code
+            for _ in range(3)
+        ]
+
+    assert 429 in statuses[1:], f"an ambiguous value must be limited, got {statuses}"

@@ -10,7 +10,7 @@ For every piece of personal data collected: **why do we need this?** If there's 
 |---|---|---|---|---|---|
 | Email + password hash | Authentication | PostgreSQL | Until account deletion | Backend only | None |
 | Profile (age, height, sex, activity level) | BMR/TDEE calculation | PostgreSQL | Until account deletion or user edit/delete | Backend, deterministic calc service | None |
-| Food diary entries | Core nutrition tracking | PostgreSQL | Until account deletion or user delete | Backend | Food-DB provider receives only the search query, not the diary entry |
+| Food diary entries | Core nutrition tracking | PostgreSQL | Until account deletion or user delete | Backend | Food-DB provider receives only a scanned barcode, or a search term the user explicitly opted to send — never the diary entry itself |
 | Natural-language food text ("I ate two eggs...") | Parsing into structured items | Sent transiently to AI provider for parsing, structured result stored in PostgreSQL | Raw text not retained beyond the parse request unless the user also saves it as a note | Backend, AI provider (transient) | AI provider — see `ai-safety.md` |
 | Food photos (optional) | Photo-based food recognition | Object storage, private bucket, encrypted at rest | Deleted after processing unless user opts to keep it; defined max retention if kept | Backend + vision provider (transient) | Vision AI provider — image only, no user identity metadata |
 | Progress photos (optional) | User-tracked visual progress | Object storage, private bucket, encrypted at rest | Until user deletes or account deletion | Backend only, never AI providers | None |
@@ -28,6 +28,7 @@ For every piece of personal data collected: **why do we need this?** If there's 
 
 - The AI layer never receives: email, full name, password, auth tokens, payment information. See `ai-safety.md` for exactly what each AI call does receive.
 - Analytics (if/when added) never receive raw health data (weights, food logs, workout details) without a specific, documented, lawful reason — see §34 of the master prompt.
+- Trends, adherence, and the adaptive calorie target are computed on the server from the user's own rows and leave nothing behind: no third party is involved, no analytics provider sees them, and nothing about them is sent to the AI layer.
 - Images are processed for their required signal (food recognition, progress comparison) and not retained by default; if retained, they are encrypted and user-deletable.
 - Device health data is read, never written: Fitora requests read scopes only, and only for steps, distance, workouts and active energy. Sleep, heart rate and clinical records are not requested because no feature uses them.
 - Reading a device requires two separate agreements, in this order: the in-app `wearable_access` consent, then the OS permission. Asking the OS first would put the user's answer on record before Fitora had the right to keep anything they agreed to.
