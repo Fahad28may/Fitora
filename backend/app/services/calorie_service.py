@@ -55,7 +55,7 @@ class GoalIntensity(StrEnum):
 
 # kcal/day adjustment from TDEE, and the approximate weekly rate of bodyweight
 # change it implies (~7700 kcal per kg of bodyweight).
-_INTENSITY_DAILY_KCAL_ADJUSTMENT: dict[GoalIntensity, int] = {
+INTENSITY_DAILY_KCAL_ADJUSTMENT: dict[GoalIntensity, int] = {
     GoalIntensity.LIGHT: 250,
     GoalIntensity.STANDARD: 500,
     GoalIntensity.AGGRESSIVE: 1000,
@@ -92,7 +92,7 @@ def calculate_tdee(*, bmr: float, activity_level: ActivityLevel) -> float:
     return bmr * ACTIVITY_MULTIPLIERS[activity_level]
 
 
-def _macros_for_calories(calories: int) -> MacroTargets:
+def macros_for_calories(calories: int) -> MacroTargets:
     return MacroTargets(
         protein_g=round(calories * PROTEIN_CALORIE_SHARE / PROTEIN_KCAL_PER_GRAM),
         carbs_g=round(calories * CARBS_CALORIE_SHARE / CARBS_KCAL_PER_GRAM),
@@ -113,7 +113,7 @@ def calculate_targets(
     bmr = calculate_bmr(sex=sex, weight_kg=weight_kg, height_cm=height_cm, age_years=age_years)
     tdee = calculate_tdee(bmr=bmr, activity_level=activity_level)
 
-    adjustment = _INTENSITY_DAILY_KCAL_ADJUSTMENT[intensity]
+    adjustment = INTENSITY_DAILY_KCAL_ADJUSTMENT[intensity]
     if goal_type == GoalType.LOSE_WEIGHT:
         raw_target = tdee - adjustment
     elif goal_type == GoalType.GAIN_WEIGHT:
@@ -146,9 +146,9 @@ def calculate_targets(
 
     if not is_safe:
         safer_target = round(
-            tdee - _INTENSITY_DAILY_KCAL_ADJUSTMENT[GoalIntensity.LIGHT]
+            tdee - INTENSITY_DAILY_KCAL_ADJUSTMENT[GoalIntensity.LIGHT]
             if goal_type == GoalType.LOSE_WEIGHT
-            else tdee + _INTENSITY_DAILY_KCAL_ADJUSTMENT[GoalIntensity.LIGHT]
+            else tdee + INTENSITY_DAILY_KCAL_ADJUSTMENT[GoalIntensity.LIGHT]
             if goal_type == GoalType.GAIN_WEIGHT
             else tdee
         )
@@ -158,7 +158,7 @@ def calculate_targets(
         bmr=round(bmr),
         tdee=round(tdee),
         target_calories=target_calories,
-        macros=_macros_for_calories(target_calories),
+        macros=macros_for_calories(target_calories),
         is_safe=is_safe,
         warnings=warnings,
         safer_alternative_calories=safer_alternative,

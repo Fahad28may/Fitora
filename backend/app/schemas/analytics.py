@@ -135,3 +135,40 @@ class AnalyticsSummaryOut(BaseModel):
     weekday_patterns: list[WeekdayPattern]
     energy_balance: EnergyBalanceOut
 
+
+class AdaptiveTargetBasis(BaseModel):
+    """The evidence behind an adaptive suggestion, returned alongside it.
+
+    A number that changes someone's daily calorie target should be auditable
+    by the person it is aimed at, so the inputs travel with the output rather
+    than staying on the server.
+    """
+
+    window_days: int
+    span_days: int
+    days_with_food_logged: int
+    weigh_in_days: int
+    avg_intake_kcal: float
+    weight_change_kg: float
+
+
+class AdaptiveTargetsOut(BaseModel):
+    available: bool
+    unavailable_reason: str | None = None
+    confidence: Confidence | None = None
+    #: Maintenance implied by the user's own intake and weight change.
+    estimated_maintenance_kcal: int | None = None
+    #: Maintenance predicted from the profile (Mifflin-St Jeor x activity
+    #: level), shown next to the observed figure so the difference between a
+    #: population equation and this person is visible rather than hidden.
+    predicted_maintenance_kcal: int | None = None
+    current_target_calories: int | None = None
+    suggested_target_calories: int | None = None
+    suggested_protein_g: int | None = None
+    suggested_carbs_g: int | None = None
+    suggested_fat_g: int | None = None
+    delta_kcal: int | None = None
+    basis: AdaptiveTargetBasis | None = None
+    #: Always populated when a suggestion is present — including the standing
+    #: reminder that nothing has been applied.
+    caveats: list[str] = []

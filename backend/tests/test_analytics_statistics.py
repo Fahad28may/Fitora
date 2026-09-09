@@ -1,4 +1,4 @@
-"""Pure-function tests for the analytics maths.
+"""Pure-function tests for the analytics maths and the adaptive-target rules.
 
 No database and no HTTP: these are the rules that decide whether a number is
 honest enough to show a user, so they are tested directly.
@@ -8,12 +8,26 @@ from datetime import date, timedelta
 
 import pytest
 
+from app.schemas.analytics import Confidence
+from app.services.analytics.adaptive_targets import (
+    MAX_SINGLE_ADJUSTMENT_FRACTION,
+    estimate_confidence,
+    estimate_maintenance_kcal,
+    is_plausible_maintenance,
+    propose_target,
+)
 from app.services.analytics.statistics import (
     current_streak,
     exponential_moving_average,
     linear_fit,
     longest_streak,
     mean,
+)
+from app.services.calorie_service import (
+    KCAL_PER_KG_BODYWEIGHT,
+    MIN_SAFE_DAILY_CALORIES,
+    GoalIntensity,
+    GoalType,
 )
 
 
@@ -106,3 +120,118 @@ class TestMean:
         with pytest.raises(ValueError, match="no values"):
             mean([])
 
+
+class TestMaintenanceEstimate:
+    def test_steady_weight_means_intake_is_maintenance(self) -> None:
+        estimate = estimate_maintenance_kcal(
+            avg_intake_kcal=2400, weight_change_kg=0.0, span_days=28
+        )
+        assert estimate.maintenance_kcal == 2400
+
+    def test_losing_weight_implies_maintenance_above_intake(self) -> None:
+        # 1 kg lost over 28 days is a deficit of 7700/28 = 275 kcal/day.
+        estimate = estimate_maintenance_kcal(
+            avg_intake_kcal=2000, weight_change_kg=-1.0, span_days=28
+        )
+        assert estimate.maintenance_kcal == round(2000 + KCAL_PER_KG_BODYWEIGHT / 28)
+
+    def test_gaining_weight_implies_maintenance_below_intake(self) -> None:
+        estimate = estimate_maintenance_kcal(
+            avg_intake_kcal=3000, weight_change_kg=1.0, span_days=28
+        )
+        assert estimate.maintenance_kcal < 3000
+
+    def test_rejects_a_zero_span(self) -> None:
+        with pytest.raises(ValueError, match="span_days"):
+            estimate_maintenance_kcal(
+                avg_intake_kcal=2000, weight_change_kg=-1.0, span_days=0
+            )
+
+
+class TestPlausibility:
+    def test_accepts_an_estimate_near_the_prediction(self) -> None:
+        assert is_plausible_maintenance(2400, 2500)
+
+    def test_rejects_a_physiologically_impossible_estimate(self) -> None:
+        assert not is_plausible_maintenance(600, None)
+        assert not is_plausible_maintenance(9000, None)
+
+    def test_rejects_an_estimate_far_from_the_prediction(self) -> None:
+        # The realistic cause is under-logging, not an extraordinary
+        # metabolism — and acting on it would tell someone to eat far too little.
+        assert not is_plausible_maintenance(1200, 2600)
+
+    def test_falls_back_to_absolute_bounds_without_a_prediction(self) -> None:
+        assert is_plausible_maintenance(1200, None)
+
+
+class TestConfidence:
+    def test_dense_long_history_is_high(self) -> None:
+        assert (
+            estimate_confidence(span_days=28, food_days=25, weigh_in_days=14)
+            == Confidence.HIGH
+        )
+
+    def test_adequate_history_is_moderate(self) -> None:
+        assert (
+            estimate_confidence(span_days=21, food_days=15, weigh_in_days=6)
+            == Confidence.MODERATE
+        )
+
+    def test_sparse_history_is_low(self) -> None:
+        assert (
+            estimate_confidence(span_days=28, food_days=12, weigh_in_days=3)
+            == Confidence.LOW
+        )
+
+
+class TestProposeTarget:
+    def test_cuts_from_observed_maintenance_when_losing(self) -> None:
+        proposal = propose_target(
+            maintenance_kcal=2600,
+            goal_type=GoalType.LOSE_WEIGHT,
+            intensity=GoalIntensity.STANDARD,
+            current_target_kcal=2200,
+        )
+        assert proposal.suggested_calories == 2100
+        assert proposal.delta_from_current_kcal == -100
+        assert proposal.warnings == []
+
+    def test_adds_to_observed_maintenance_when_gaining(self) -> None:
+        proposal = propose_target(
+            maintenance_kcal=2600,
+            goal_type=GoalType.GAIN_WEIGHT,
+            intensity=GoalIntensity.LIGHT,
+            current_target_kcal=2800,
+        )
+        assert proposal.suggested_calories == 2850
+
+    def test_maintaining_targets_maintenance_itself(self) -> None:
+        proposal = propose_target(
+            maintenance_kcal=2450,
+            goal_type=GoalType.MAINTAIN_WEIGHT,
+            intensity=GoalIntensity.STANDARD,
+            current_target_kcal=2400,
+        )
+        assert proposal.suggested_calories == 2450
+
+    def test_a_large_move_is_capped_and_explained(self) -> None:
+        proposal = propose_target(
+            maintenance_kcal=4000,
+            goal_type=GoalType.MAINTAIN_WEIGHT,
+            intensity=GoalIntensity.STANDARD,
+            current_target_kcal=2000,
+        )
+        assert proposal.suggested_calories == round(2000 * (1 + MAX_SINGLE_ADJUSTMENT_FRACTION))
+        assert any("at a time" in warning for warning in proposal.warnings)
+
+    def test_never_proposes_below_the_safety_floor(self) -> None:
+        # The step cap alone would allow 1120 here; the floor must still bite.
+        proposal = propose_target(
+            maintenance_kcal=1300,
+            goal_type=GoalType.LOSE_WEIGHT,
+            intensity=GoalIntensity.AGGRESSIVE,
+            current_target_kcal=1400,
+        )
+        assert proposal.suggested_calories == MIN_SAFE_DAILY_CALORIES
+        assert any(str(MIN_SAFE_DAILY_CALORIES) in warning for warning in proposal.warnings)

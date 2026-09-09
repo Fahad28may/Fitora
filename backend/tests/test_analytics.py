@@ -147,6 +147,9 @@ class TestAnalyticsAccess:
     async def test_summary_requires_authentication(self, client: AsyncClient) -> None:
         assert (await client.get("/api/v1/analytics/summary")).status_code == 401
 
+    async def test_adaptive_targets_requires_authentication(self, client: AsyncClient) -> None:
+        assert (await client.get("/api/v1/analytics/adaptive-targets")).status_code == 401
+
     async def test_window_is_bounded(self, client: AsyncClient) -> None:
         headers = await _auth_headers(client, "window@example.com")
         too_short = await client.get(
@@ -464,3 +467,96 @@ class TestEnergyBalance:
         assert balance["avg_intake_kcal"] == pytest.approx(2500.0)
         assert "Complete your profile" in balance["unavailable_reason"]
 
+
+class TestAdaptiveTargets:
+    async def _adaptive(
+        self, client: AsyncClient, headers: dict[str, str]
+    ) -> dict[str, object]:
+        resp = await client.get("/api/v1/analytics/adaptive-targets", headers=headers)
+        assert resp.status_code == 200, resp.text
+        return dict(resp.json())
+
+    async def test_needs_a_goal_to_adapt(self, client: AsyncClient) -> None:
+        headers = await _auth_headers(client, "adaptive-nogoal@example.com")
+        body = await self._adaptive(client, headers)
+        assert body["available"] is False
+        assert "Set a goal first" in body["unavailable_reason"]
+
+    async def test_needs_enough_logging(self, client: AsyncClient) -> None:
+        headers = await _auth_headers(client, "adaptive-thin@example.com")
+        await _set_profile(client, headers)
+        goal = await _set_goal(client, headers)
+        food_id = await _create_food(client, headers)
+        for index in (25, 26, 27):
+            await _log_food(client, headers, food_id=food_id, day=_day(index), servings=5)
+
+        body = await self._adaptive(client, headers)
+        assert body["available"] is False
+        assert "Log food on at least" in body["unavailable_reason"]
+        # The current target is still echoed back, so the client can show what
+        # is in force while explaining why there is no proposal.
+        assert body["current_target_calories"] == goal["target_calories"]
+
+    async def test_needs_enough_weigh_ins(self, client: AsyncClient) -> None:
+        headers = await _auth_headers(client, "adaptive-noweight@example.com")
+        await _set_profile(client, headers)
+        await _set_goal(client, headers)
+        food_id = await _create_food(client, headers)
+        for index in range(28):
+            await _log_food(client, headers, food_id=food_id, day=_day(index), servings=5)
+        await _log_weight(client, headers, day=_day(27), weight_kg=79.0)
+
+        body = await self._adaptive(client, headers)
+        assert body["available"] is False
+        assert "Weigh in on at least" in body["unavailable_reason"]
+
+    async def test_estimates_maintenance_from_the_users_own_data(
+        self, client: AsyncClient
+    ) -> None:
+        headers = await _auth_headers(client, "adaptive@example.com")
+        await _set_profile(client, headers)
+        goal = await _set_goal(client, headers)
+        # 2500 kcal/day while losing ~1 kg over four weeks implies maintenance
+        # near 2500 + 7700/28 = ~2775 kcal.
+        await _seed_28_days(client, headers)
+
+        body = await self._adaptive(client, headers)
+        assert body["available"] is True
+        assert body["estimated_maintenance_kcal"] == pytest.approx(2775, abs=60)
+        assert body["current_target_calories"] == goal["target_calories"]
+        # Maintain goal: the suggestion is maintenance itself.
+        assert body["suggested_target_calories"] == body["estimated_maintenance_kcal"]
+        assert body["confidence"] in {"moderate", "high"}
+        assert body["basis"]["weigh_in_days"] == 14
+        assert any("nothing changes until" in c.lower() for c in body["caveats"])
+
+    async def test_suggests_a_deficit_under_a_weight_loss_goal(
+        self, client: AsyncClient
+    ) -> None:
+        headers = await _auth_headers(client, "adaptive-lose@example.com")
+        await _set_profile(client, headers)
+        await _set_goal(client, headers, goal_type="lose_weight", target_weight_kg=75.0)
+        await _seed_28_days(client, headers)
+
+        body = await self._adaptive(client, headers)
+        assert body["available"] is True
+        assert body["suggested_target_calories"] < body["estimated_maintenance_kcal"]
+        assert body["suggested_target_calories"] >= 1200
+
+    async def test_withholds_an_estimate_that_implies_under_logging(
+        self, client: AsyncClient
+    ) -> None:
+        headers = await _auth_headers(client, "adaptive-implausible@example.com")
+        await _set_profile(client, headers)
+        await _set_goal(client, headers)
+        # 1000 kcal/day logged while the scale barely moves implies a
+        # maintenance near 1000 — far below the profile prediction. The
+        # realistic explanation is partial logging, and telling this user to
+        # eat 1000 kcal would be actively harmful.
+        await _seed_28_days(client, headers, servings_per_day=2.0, end_kg=79.9)
+
+        body = await self._adaptive(client, headers)
+        assert body["available"] is False
+        assert "do not line up" in body["unavailable_reason"]
+        # The evidence is still returned so the user can see what was measured.
+        assert body["basis"]["avg_intake_kcal"] == pytest.approx(1000.0)
